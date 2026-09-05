@@ -14,6 +14,7 @@ const NAV_LINKS = [
     { label: "Dashboards", id: "dashboards" },
     { label: "Analytics", id: "analytics" },
     { label: "Integrations", id: "integrations" },
+    { label: "Notifications", id: "notifications" },
     { label: "Collaboration", id: "collaboration" },
 ];
 

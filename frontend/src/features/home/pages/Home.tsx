@@ -26,6 +26,7 @@ import {
     TbAlphabetLatin,
     TbArrowsJoin,
     TbBarbell,
+    TbBell,
     TbBook,
     TbBoxMultiple,
     TbCalendar,
@@ -43,6 +44,7 @@ import {
     TbHeading,
     TbLayoutDashboard,
     TbLayoutGrid,
+    TbMessage,
     TbMicroscope,
     TbMovie,
     TbPlug,
@@ -164,11 +166,42 @@ const FEATURES = [
             "Pull data from intervals.icu and Firefly III straight onto tracker fields you map.",
     },
     {
+        icon: <TbBell size={22} />,
+        color: "pink",
+        title: "Notifications",
+        description:
+            "Alert rules per tracker, on a schedule or the moment a condition turns true, by push and inbox.",
+    },
+    {
         icon: <TbUsers size={22} />,
         color: "red",
         title: "Collaboration",
         description:
             "Share trackers with teammates using fine-grained read and write permissions.",
+    },
+];
+
+const NOTIFICATION_ASPECTS = [
+    {
+        icon: <TbCalendarClock size={22} />,
+        color: "blue",
+        title: "Scheduled or on change",
+        detail:
+            "Run a daily, weekly, or monthly check at a set time, or fire the moment a condition turns true.",
+    },
+    {
+        icon: <TbBell size={22} />,
+        color: "teal",
+        title: "Push and inbox",
+        detail:
+            "Every rule reaches all tracker collaborators as a browser notification and an in-app inbox item.",
+    },
+    {
+        icon: <TbMessage size={22} />,
+        color: "grape",
+        title: "Your own message",
+        detail:
+            "Write the alert text with count, value, and field-list tokens, or keep the generated default.",
     },
 ];
 
@@ -1052,10 +1085,92 @@ const Home = observer(() => {
                         </Container>
                     </Box>
 
+                    {/* ── Notifications ─────────────────────────────────── */}
+                    <Box
+                        id="notifications"
+                        style={{ background: altBg, scrollMarginTop: "60px" }}
+                    >
+                        <Container size="lg" py={80}>
+                            <Grid gutter={60} align="center">
+                                <Grid.Col span={{ base: 12, md: 5 }}>
+                                    <Stack gap="lg">
+                                        <div>
+                                            <Text
+                                                size="sm"
+                                                fw={700}
+                                                tt="uppercase"
+                                                c={theme.primaryColor}
+                                                style={{
+                                                    letterSpacing: "0.08em",
+                                                }}
+                                                mb={8}
+                                            >
+                                                Notifications
+                                            </Text>
+                                            <Title order={2} mb="md">
+                                                Know when your data moves
+                                            </Title>
+                                            <Text c="dimmed" lh={1.7}>
+                                                Give a tracker alert rules that
+                                                watch its entries or a chart's
+                                                value. Each rule checks on a
+                                                schedule or the instant a
+                                                condition turns true, scopes to a
+                                                view, and resolves times in your
+                                                account time zone.
+                                            </Text>
+                                        </div>
+                                    </Stack>
+                                </Grid.Col>
+
+                                <Grid.Col span={{ base: 12, md: 7 }}>
+                                    <SimpleGrid
+                                        cols={{ base: 1, sm: 3 }}
+                                        spacing="md"
+                                    >
+                                        {NOTIFICATION_ASPECTS.map((a) => (
+                                            <Card
+                                                key={a.title}
+                                                withBorder
+                                                radius="md"
+                                                p="lg"
+                                                h="100%"
+                                                style={{
+                                                    borderTop: `3px solid var(--mantine-color-${a.color}-5)`,
+                                                }}
+                                            >
+                                                <Stack gap="sm">
+                                                    <ThemeIcon
+                                                        size={44}
+                                                        radius="md"
+                                                        variant="light"
+                                                        color={a.color}
+                                                    >
+                                                        {a.icon}
+                                                    </ThemeIcon>
+                                                    <Text fw={600} size="sm">
+                                                        {a.title}
+                                                    </Text>
+                                                    <Text
+                                                        size="xs"
+                                                        c="dimmed"
+                                                        lh={1.5}
+                                                    >
+                                                        {a.detail}
+                                                    </Text>
+                                                </Stack>
+                                            </Card>
+                                        ))}
+                                    </SimpleGrid>
+                                </Grid.Col>
+                            </Grid>
+                        </Container>
+                    </Box>
+
                     {/* ── Collaboration ─────────────────────────────────── */}
                     <Box
                         id="collaboration"
-                        style={{ background: altBg, scrollMarginTop: "60px" }}
+                        style={{ scrollMarginTop: "60px" }}
                     >
                         <Container size="lg" py={80}>
                             <Stack gap={48}>
