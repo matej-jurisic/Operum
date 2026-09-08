@@ -127,7 +127,16 @@ namespace Operum.Tests.Tests.Dates
             Assert.Equal(LocalNow(Plus2).Date.AddDays(-7), resolved);
         }
 
+        [Fact]
+        public void NowResolvesToTheCurrentInstant()
+        {
+            var resolved = Resolve("now", Plus2);
+
+            Assert.InRange(DateTime.UtcNow - resolved, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+        }
+
         [Theory]
+        [InlineData("now")]
         [InlineData("today")]
         [InlineData("today:-1")]
         [InlineData("end_of_day:3")]

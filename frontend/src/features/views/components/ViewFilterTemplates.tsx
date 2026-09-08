@@ -4,10 +4,7 @@ import { FieldTypes, OperatorTypes } from "../../../shared/constants/DataTypes";
 import {
     DateAnchor,
     DateAnchors,
-    LookbackPrefix,
-    LookbackPrefixes,
     serializeAnchorToken,
-    serializeLookbackToken,
 } from "../../../shared/constants/dynamicDateTokens";
 
 // Filter template definitions
@@ -56,12 +53,8 @@ function periodTemplate(
     };
 }
 
-function lookbackTemplate(
-    id: string,
-    name: string,
-    prefix: LookbackPrefix,
-    n: number,
-): FilterTemplate {
+/** "Last N days": everything from N days ago through now. */
+function lastNDaysTemplate(id: string, name: string, n: number): FilterTemplate {
     return {
         id,
         name,
@@ -70,7 +63,7 @@ function lookbackTemplate(
         filters: [
             {
                 operator: OperatorTypes.GreaterThanOrEqual,
-                value: serializeLookbackToken(prefix, n),
+                value: serializeAnchorToken(DateAnchors.Today, -n),
             },
         ],
     };
@@ -128,18 +121,8 @@ export const filterTemplates: FilterTemplate[] = [
             },
         ],
     },
-    lookbackTemplate(
-        "last_7_days",
-        "Last 7 Days",
-        LookbackPrefixes.LastNDays,
-        7,
-    ),
-    lookbackTemplate(
-        "last_30_days",
-        "Last 30 Days",
-        LookbackPrefixes.LastNDays,
-        30,
-    ),
+    lastNDaysTemplate("last_7_days", "Last 7 Days", 7),
+    lastNDaysTemplate("last_30_days", "Last 30 Days", 30),
     periodTemplate(
         "current_week",
         "Current Week",

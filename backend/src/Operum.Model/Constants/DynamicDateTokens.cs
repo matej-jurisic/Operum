@@ -13,13 +13,19 @@ namespace Operum.Model.Constants
     /// which is what every previously stored value means, so old filters keep working untouched.
     ///
     /// Lookbacks (<c>last_n_*</c>) require their argument and measure backwards from now rather
-    /// than snapping to a boundary.
+    /// than snapping to a boundary. They are still resolved for filters saved before anchors
+    /// covered the same ground; the UI now emits the equivalent anchor instead.
+    ///
+    /// <c>now</c> is the current instant with no snapping, for datetime fields that need a
+    /// sub-day bound ("due before now").
     ///
     /// All boundaries are built in the user's time zone and returned as UTC instants, because a
     /// month starts at local midnight, not at 00:00Z.
     /// </summary>
     public static class DynamicDateTokens
     {
+        public const string Now = "now";
+
         public const string Today = "today";
         public const string EndOfDay = "end_of_day";
         public const string StartOfWeek = "start_of_week";
@@ -40,10 +46,13 @@ namespace Operum.Model.Constants
         private static readonly HashSet<string> LookbackPrefixes = [LastNHours, LastNDays, LastNWeeks, LastNMonths];
 
         public static bool IsValid(string token) =>
-            TryParseAnchor(token, out _, out _) || TryParseLookback(token, out _, out _);
+            token == Now || TryParseAnchor(token, out _, out _) || TryParseLookback(token, out _, out _);
 
         public static DateTime? Resolve(string token, TimeZoneInfo tz)
         {
+            if (token == Now)
+                return DateTime.UtcNow;
+
             var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
 
             if (TryParseAnchor(token, out var anchor, out var offset))

@@ -5,8 +5,12 @@
  *
  * Grammar: `token` or `token:n`. Anchors snap to a period boundary and take an optional signed
  * offset counted in that anchor's own period (`start_of_month:-1` is last month). Lookbacks
- * (`last_n_*`) require their argument and measure backwards from now.
+ * (`last_n_*`) require their argument and measure backwards from now; they are still parsed for
+ * filters saved before anchors covered the same ground, but the UI emits the equivalent anchor.
+ * `now` is the current instant with no snapping, for datetime bounds like "due before now".
  */
+
+export const NOW_TOKEN = "now";
 
 export const DateAnchors = {
     Today: "today",
@@ -56,22 +60,35 @@ export const anchorLabels: Record<DateAnchor, string> = {
     [DateAnchors.EndOfYear]: "End of year",
 };
 
+/**
+ * Anchors offered for a field, and how they read. A pure `date` has no time of day, so
+ * start/end of day collapse to a single "Day" and every "start of" boundary is just the
+ * day that period begins on.
+ */
+export function anchorOptionsForField(dateOnly: boolean): { value: DateAnchor; label: string }[] {
+    if (dateOnly) {
+        return [
+            { value: DateAnchors.Today, label: "Day" },
+            { value: DateAnchors.StartOfWeek, label: "Start of week" },
+            { value: DateAnchors.EndOfWeek, label: "End of week" },
+            { value: DateAnchors.StartOfMonth, label: "Start of month" },
+            { value: DateAnchors.EndOfMonth, label: "End of month" },
+            { value: DateAnchors.StartOfYear, label: "Start of year" },
+            { value: DateAnchors.EndOfYear, label: "End of year" },
+        ];
+    }
+    return (Object.keys(anchorLabels) as DateAnchor[]).map((value) => ({
+        value,
+        label: anchorLabels[value],
+    }));
+}
+
 export const lookbackLabels: Record<LookbackPrefix, string> = {
     [LookbackPrefixes.LastNHours]: "Last N hours",
     [LookbackPrefixes.LastNDays]: "Last N days",
     [LookbackPrefixes.LastNWeeks]: "Last N weeks",
     [LookbackPrefixes.LastNMonths]: "Last N months",
 };
-
-export const anchorOptions = Object.entries(anchorLabels).map(([value, label]) => ({
-    value,
-    label,
-}));
-
-export const lookbackOptions = Object.entries(lookbackLabels).map(([value, label]) => ({
-    value,
-    label,
-}));
 
 export interface ParsedAnchorToken {
     anchor: DateAnchor;
@@ -124,8 +141,28 @@ export function isLookbackToken(value: unknown): value is string {
     return typeof value === "string" && parseLookbackToken(value) !== null;
 }
 
+export function isNowToken(value: unknown): value is string {
+    return value === NOW_TOKEN;
+}
+
 export function isDynamicDateToken(value: unknown): value is string {
-    return isAnchorToken(value) || isLookbackToken(value);
+    return isNowToken(value) || isAnchorToken(value) || isLookbackToken(value);
+}
+
+/**
+ * The anchor token equivalent to a legacy lookback, so old filters open in the same editor as
+ * everything else. `last_n_days` / `last_n_weeks` are exact day offsets from today; the rest have
+ * no anchor equivalent and are left for the backend to resolve as-is.
+ */
+export function lookbackToAnchorToken(value: unknown): string | null {
+    const lookback = typeof value === "string" ? parseLookbackToken(value) : null;
+    if (!lookback) return null;
+
+    if (lookback.prefix === LookbackPrefixes.LastNDays)
+        return serializeAnchorToken(DateAnchors.Today, -lookback.n);
+    if (lookback.prefix === LookbackPrefixes.LastNWeeks)
+        return serializeAnchorToken(DateAnchors.Today, -lookback.n * 7);
+    return null;
 }
 
 export function serializeAnchorToken(anchor: DateAnchor, offset: number): string {
@@ -161,6 +198,8 @@ function describeDay(offset: number): string {
 }
 
 export function formatDynamicDateToken(token: string): string {
+    if (token === NOW_TOKEN) return "Now";
+
     const anchorToken = parseAnchorToken(token);
     if (anchorToken) {
         const { anchor, offset } = anchorToken;
@@ -191,6 +230,8 @@ export function formatDynamicDateToken(token: string): string {
  * user's stored zone, which is the one the picker is showing them anyway.
  */
 export function resolveDynamicDateToken(token: string, now: Date = new Date()): Date | null {
+    if (token === NOW_TOKEN) return now;
+
     const anchorToken = parseAnchorToken(token);
     if (anchorToken) return resolveAnchor(anchorToken, now);
 

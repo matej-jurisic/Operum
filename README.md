@@ -24,7 +24,7 @@ Create, edit, duplicate, and delete entries individually, or select a group to b
 
 ### Views
 
-A view is a saved lens on your data: a set of filters, a sort order, and a column selection. Switch between views without losing any configuration. Drag to reorder them, and mark one as the default that opens automatically. Use dynamic value filters to build live views that shift over time, with date values such as `today`, `start of month`, or `end of year`.
+A view is a saved lens on your data: a set of filters, a sort order, and a column selection. Switch between views without losing any configuration. Drag to reorder them, and mark one as the default that opens automatically. Use dynamic value filters to build live views that shift over time, with date values such as `now`, `today`, `start of month`, or `end of year`, each with an offset for any number of days, weeks, months, or years back or ahead.
 
 Views are assembled from reusable queries. A query is a single clause, one filter or one sort, shared across the views that use it, so the same "logged this month" filter can back several views at once.
 

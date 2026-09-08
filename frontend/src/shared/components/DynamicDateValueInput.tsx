@@ -1,19 +1,15 @@
 import { Group, NumberInput, SegmentedControl, Select, Stack, Text } from "@mantine/core";
 import FieldValueInput from "../../features/fields/components/FieldValueInput";
 import {
-    anchorOptions,
+    anchorOptionsForField,
     DateAnchor,
     DateAnchors,
-    describeOffset,
     isDynamicDateToken,
-    isLookbackToken,
-    LookbackPrefix,
-    LookbackPrefixes,
+    lookbackToAnchorToken,
+    NOW_TOKEN,
     parseAnchorToken,
-    parseLookbackToken,
     resolveDynamicDateToken,
     serializeAnchorToken,
-    serializeLookbackToken,
 } from "../constants/dynamicDateTokens";
 import { formatDateTimeFromDate } from "../utils/formatters/TypeFormatter";
 
@@ -27,17 +23,7 @@ interface Props {
     label?: string;
 }
 
-const UNIT_OPTIONS = [
-    { value: LookbackPrefixes.LastNHours, label: "Hours" },
-    { value: LookbackPrefixes.LastNDays, label: "Days" },
-    { value: LookbackPrefixes.LastNWeeks, label: "Weeks" },
-    { value: LookbackPrefixes.LastNMonths, label: "Months" },
-];
-
-/** Offsets a filter realistically needs; anything further out is a fixed date in practice. */
-const OFFSET_OPTIONS = [-3, -2, -1, 0, 1];
-
-type DateMode = "date" | "named" | "relative";
+type DateMode = "date" | "relative";
 
 export default function DynamicDateValueInput({
     isDateType,
@@ -48,31 +34,32 @@ export default function DynamicDateValueInput({
     fieldPath,
     label,
 }: Props) {
-    const isRelative = isLookbackToken(value);
-    const isNamed = isDynamicDateToken(value) && !isRelative;
+    // A pure date has no time of day, so start/end of day collapse and "now" makes no sense.
+    const isDateOnly = field?.type === "date";
 
-    const anchorToken = isNamed ? parseAnchorToken(value as string) : null;
-    const lookback = isRelative ? parseLookbackToken(value as string) : null;
+    // Old filters stored a lookback token; open them in the same editor as the anchor form.
+    const token =
+        typeof value === "string" ? (lookbackToAnchorToken(value) ?? value) : undefined;
+    const isToken = token !== undefined && isDynamicDateToken(token);
+    const isNow = token === NOW_TOKEN;
 
-    const dateMode: DateMode = isRelative ? "relative" : isNamed ? "named" : "date";
+    const dateMode: DateMode = isToken ? "relative" : "date";
 
+    const anchorToken = isToken && !isNow ? parseAnchorToken(token) : null;
     const anchor = anchorToken?.anchor ?? DateAnchors.Today;
     const offset = anchorToken?.offset ?? 0;
-    const relativeUnit = lookback?.prefix ?? LookbackPrefixes.LastNDays;
-    const relativeAmount = lookback?.n ?? 7;
 
-    // The token itself says nothing about what it currently points at, so show the resolved date.
-    const preview =
-        typeof value === "string" && isDynamicDateToken(value)
-            ? resolveDynamicDateToken(value)
-            : null;
+    const currentToken = isNow ? NOW_TOKEN : serializeAnchorToken(anchor, offset);
+    const preview = isToken ? resolveDynamicDateToken(currentToken) : null;
+
+    const anchorData = [
+        ...(isDateOnly ? [] : [{ value: NOW_TOKEN, label: "Now" }]),
+        ...anchorOptionsForField(isDateOnly),
+    ];
 
     const handleModeChange = (v: string) => {
         if (v === dateMode) return;
-        if (v === "named") onChange(DateAnchors.Today);
-        else if (v === "relative")
-            onChange(serializeLookbackToken(LookbackPrefixes.LastNDays, 7));
-        else onChange(undefined);
+        onChange(v === "relative" ? DateAnchors.Today : undefined);
     };
 
     return (
@@ -82,7 +69,6 @@ export default function DynamicDateValueInput({
                     size="xs"
                     data={[
                         { value: "date", label: "Date" },
-                        { value: "named", label: "Named" },
                         { value: "relative", label: "Relative" },
                     ]}
                     value={dateMode}
@@ -99,79 +85,57 @@ export default function DynamicDateValueInput({
                 />
             )}
 
-            {isDateType && dateMode === "named" && (
-                <Group gap="xs" align="flex-end" grow>
-                    <Select
-                        label={label ?? "Value"}
-                        placeholder="Select named date"
-                        data={anchorOptions}
-                        value={anchor}
-                        onChange={(v) =>
-                            onChange(serializeAnchorToken((v as DateAnchor) ?? anchor, offset))
-                        }
-                        allowDeselect={false}
-                        comboboxProps={{ zIndex: 500 }}
-                    />
-                    <Select
-                        label="Period"
-                        data={OFFSET_OPTIONS.map((o) => ({
-                            value: String(o),
-                            label: capitalize(describeOffset(anchor, o)),
-                        }))}
-                        value={String(offset)}
-                        onChange={(v) =>
-                            onChange(serializeAnchorToken(anchor, v ? parseInt(v, 10) : 0))
-                        }
-                        allowDeselect={false}
-                        comboboxProps={{ zIndex: 500 }}
-                    />
-                </Group>
-            )}
-
             {isDateType && dateMode === "relative" && (
                 <Stack gap={4}>
-                    <Group gap="xs" align="flex-end">
-                        <NumberInput
-                            label="Amount"
-                            min={1}
-                            value={Math.abs(relativeAmount)}
-                            onChange={(v) => {
-                                if (typeof v === "number" && v > 0) {
-                                    const signed = relativeAmount < 0 ? -v : v;
-                                    onChange(serializeLookbackToken(relativeUnit, signed));
-                                }
-                            }}
-                            style={{ flex: 1 }}
-                        />
+                    <Group gap="xs" align="flex-end" grow>
                         <Select
-                            label="Unit"
-                            allowDeselect={false}
-                            data={UNIT_OPTIONS}
-                            value={relativeUnit}
+                            label={label ?? "Value"}
+                            data={anchorData}
+                            value={isNow ? NOW_TOKEN : anchor}
                             onChange={(v) => {
-                                if (v)
-                                    onChange(
-                                        serializeLookbackToken(v as LookbackPrefix, relativeAmount),
-                                    );
+                                if (!v) return;
+                                onChange(
+                                    v === NOW_TOKEN
+                                        ? NOW_TOKEN
+                                        : serializeAnchorToken(v as DateAnchor, offset),
+                                );
                             }}
-                            style={{ flex: 1 }}
+                            allowDeselect={false}
                             comboboxProps={{ zIndex: 500 }}
                         />
+                        {!isNow && (
+                            <NumberInput
+                                label="Offset"
+                                min={0}
+                                value={Math.abs(offset)}
+                                onChange={(v) => {
+                                    const magnitude = typeof v === "number" && v > 0 ? v : 0;
+                                    const signed = offset < 0 ? -magnitude : magnitude;
+                                    onChange(serializeAnchorToken(anchor, signed));
+                                }}
+                            />
+                        )}
                     </Group>
-                    <SegmentedControl
-                        size="xs"
-                        fullWidth
-                        data={[
-                            { value: "past", label: "Ago" },
-                            { value: "future", label: "From now" },
-                        ]}
-                        value={relativeAmount < 0 ? "future" : "past"}
-                        onChange={(v) => {
-                            const magnitude = Math.abs(relativeAmount);
-                            const signed = v === "future" ? -magnitude : magnitude;
-                            onChange(serializeLookbackToken(relativeUnit, signed));
-                        }}
-                    />
+                    {!isNow && (
+                        <SegmentedControl
+                            size="xs"
+                            fullWidth
+                            data={[
+                                { value: "past", label: "Ago" },
+                                { value: "future", label: "From now" },
+                            ]}
+                            value={offset > 0 ? "future" : "past"}
+                            onChange={(v) => {
+                                const magnitude = Math.abs(offset);
+                                onChange(
+                                    serializeAnchorToken(
+                                        anchor,
+                                        v === "future" ? magnitude : -magnitude,
+                                    ),
+                                );
+                            }}
+                        />
+                    )}
                 </Stack>
             )}
 
@@ -182,8 +146,4 @@ export default function DynamicDateValueInput({
             )}
         </Stack>
     );
-}
-
-function capitalize(text: string): string {
-    return text.charAt(0).toUpperCase() + text.slice(1);
 }
