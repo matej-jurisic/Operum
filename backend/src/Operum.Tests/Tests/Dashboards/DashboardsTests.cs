@@ -1319,6 +1319,186 @@ namespace Operum.Tests.Tests.Dashboards
             Assert.Equal(HttpStatusCode.NotFound, layoutResponse.StatusCode);
         }
 
+        // ----- Tabs container -----
+
+        // Adds a tabs container and hands back its item id plus its tab ids in order.
+        private async Task<(string ItemId, string[] TabIds)> AddTabsContainer(HttpClient client, string dashboardId)
+        {
+            var add = await client.PostAsync($"dashboard/{dashboardId}/items/tabs-container", null);
+            Assert.Equal(HttpStatusCode.OK, add.StatusCode);
+            var itemId = (await Data(add)).GetProperty("id").GetString()!;
+            return (itemId, await TabIds(client, dashboardId, itemId));
+        }
+
+        private static async Task<string[]> TabIds(HttpClient client, string dashboardId, string itemId)
+        {
+            var widgets = await Widgets(client, dashboardId);
+            var item = widgets.EnumerateArray().Single(w => w.GetProperty("id").GetString() == itemId);
+            var config = JsonDocument.Parse(item.GetProperty("config").GetString()!).RootElement;
+            return [.. config.GetProperty("tabs").EnumerateArray().Select(t => t.GetProperty("id").GetString()!)];
+        }
+
+        private static JsonElement WidgetById(JsonElement widgets, string id) =>
+            widgets.EnumerateArray().Single(w => w.GetProperty("id").GetString() == id);
+
+        [Fact]
+        public async Task AddTabsContainerItem_SeedsExactlyOneTab()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("tabsadd");
+            var dashboardId = await CreateDashboard(client);
+
+            var (itemId, tabIds) = await AddTabsContainer(client, dashboardId);
+
+            Assert.Single(tabIds);
+            var widget = WidgetById(await Widgets(client, dashboardId), itemId);
+            Assert.Equal(DashboardWidgetTypes.TabsContainer, widget.GetProperty("type").GetString());
+        }
+
+        [Fact]
+        public async Task SaveTabsContainer_RenamesKeptTabsAndCreatesNewOnes()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("tabssave");
+            var dashboardId = await CreateDashboard(client);
+            var (itemId, tabIds) = await AddTabsContainer(client, dashboardId);
+
+            var save = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{itemId}/tabs-container", new SaveTabsContainerDto
+            {
+                Title = "Overview",
+                Tabs =
+                [
+                    new SaveTabDto { Id = tabIds[0], Name = "Renamed" },
+                    new SaveTabDto { Name = "Second" }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, save.StatusCode);
+
+            var config = JsonDocument.Parse(
+                WidgetById(await Widgets(client, dashboardId), itemId).GetProperty("config").GetString()!).RootElement;
+
+            Assert.Equal("Overview", config.GetProperty("title").GetString());
+            var tabs = config.GetProperty("tabs").EnumerateArray().ToList();
+            Assert.Equal(2, tabs.Count);
+            Assert.Equal(tabIds[0], tabs[0].GetProperty("id").GetString());
+            Assert.Equal("Renamed", tabs[0].GetProperty("name").GetString());
+            Assert.NotEqual(tabIds[0], tabs[1].GetProperty("id").GetString());
+        }
+
+        [Fact]
+        public async Task SaveTabsContainer_RemovingATab_MovesItsChildrenToTheFirstRemainingTab()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("tabsremove");
+            var tracker = await CreateCapableTracker(client, "Weight");
+            var dashboardId = await CreateDashboard(client);
+            var (containerId, _) = await AddTabsContainer(client, dashboardId);
+
+            // Give it a second tab, then drop a widget into that second tab.
+            var tabIds = await TabIds(client, dashboardId, containerId);
+            await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{containerId}/tabs-container", new SaveTabsContainerDto
+            {
+                Tabs = [new SaveTabDto { Id = tabIds[0], Name = "One" }, new SaveTabDto { Name = "Two" }]
+            });
+            tabIds = await TabIds(client, dashboardId, containerId);
+
+            var childId = await AddLineItem(client, dashboardId, tracker);
+            await client.PutAsJsonAsync($"dashboard/{dashboardId}/layout", new UpdateDashboardLayoutDto
+            {
+                Items =
+                [
+                    new DashboardLayoutItemDto { ItemId = childId, ParentItemId = containerId, ParentTabId = tabIds[1], X = 0, Y = 0, W = 6, H = 6 }
+                ]
+            });
+
+            var child = WidgetById(await Widgets(client, dashboardId), childId);
+            Assert.Equal(tabIds[1], child.GetProperty("parentTabId").GetString());
+
+            // Remove the second tab; its child falls back to the first.
+            await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{containerId}/tabs-container", new SaveTabsContainerDto
+            {
+                Tabs = [new SaveTabDto { Id = tabIds[0], Name = "One" }]
+            });
+
+            child = WidgetById(await Widgets(client, dashboardId), childId);
+            Assert.Equal(containerId, child.GetProperty("parentItemId").GetString());
+            Assert.Equal(tabIds[0], child.GetProperty("parentTabId").GetString());
+        }
+
+        [Fact]
+        public async Task UpdateDashboardLayout_TabsContainerChild_WithUnknownTab_FallsBackToTheFirstTab()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("tabsunknown");
+            var tracker = await CreateCapableTracker(client, "Weight");
+            var dashboardId = await CreateDashboard(client);
+            var (containerId, tabIds) = await AddTabsContainer(client, dashboardId);
+            var childId = await AddLineItem(client, dashboardId, tracker);
+
+            await client.PutAsJsonAsync($"dashboard/{dashboardId}/layout", new UpdateDashboardLayoutDto
+            {
+                Items =
+                [
+                    new DashboardLayoutItemDto { ItemId = childId, ParentItemId = containerId, ParentTabId = "not-a-real-tab", X = 0, Y = 0, W = 6, H = 6 }
+                ]
+            });
+
+            var child = WidgetById(await Widgets(client, dashboardId), childId);
+            Assert.Equal(containerId, child.GetProperty("parentItemId").GetString());
+            Assert.Equal(tabIds[0], child.GetProperty("parentTabId").GetString());
+        }
+
+        [Fact]
+        public async Task RemoveDashboardItem_TabsContainer_ReparentsChildrenToTheBoard()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("tabsdelete");
+            var tracker = await CreateCapableTracker(client, "Weight");
+            var dashboardId = await CreateDashboard(client);
+            var (containerId, tabIds) = await AddTabsContainer(client, dashboardId);
+            var childId = await AddLineItem(client, dashboardId, tracker);
+
+            await client.PutAsJsonAsync($"dashboard/{dashboardId}/layout", new UpdateDashboardLayoutDto
+            {
+                Items =
+                [
+                    new DashboardLayoutItemDto { ItemId = containerId, X = 0, Y = 0, W = DashboardGrid.Columns, H = 20 },
+                    new DashboardLayoutItemDto { ItemId = childId, ParentItemId = containerId, ParentTabId = tabIds[0], X = 0, Y = 0, W = 6, H = 6 }
+                ]
+            });
+
+            var remove = await client.DeleteAsync($"dashboard/{dashboardId}/items/{containerId}");
+            Assert.Equal(HttpStatusCode.OK, remove.StatusCode);
+
+            var widgets = await Widgets(client, dashboardId);
+            Assert.Equal(1, widgets.GetArrayLength());
+            var child = widgets[0];
+            Assert.Equal(childId, child.GetProperty("id").GetString());
+            Assert.False(child.TryGetProperty("parentItemId", out var p) && p.ValueKind != JsonValueKind.Null && !string.IsNullOrEmpty(p.GetString()));
+            Assert.False(child.TryGetProperty("parentTabId", out var t) && t.ValueKind != JsonValueKind.Null && !string.IsNullOrEmpty(t.GetString()));
+        }
+
+        [Fact]
+        public async Task UpdateDashboardLayout_AContainerCannotBeNestedInATabsContainer()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("tabsnesting");
+            var dashboardId = await CreateDashboard(client);
+            var (tabsContainerId, tabIds) = await AddTabsContainer(client, dashboardId);
+            var plainContainerId = (await Data(await client.PostAsync($"dashboard/{dashboardId}/items/container", null))).GetProperty("id").GetString()!;
+
+            await client.PutAsJsonAsync($"dashboard/{dashboardId}/layout", new UpdateDashboardLayoutDto
+            {
+                Items =
+                [
+                    new DashboardLayoutItemDto { ItemId = plainContainerId, ParentItemId = tabsContainerId, ParentTabId = tabIds[0], X = 0, Y = 0, W = 6, H = 6 }
+                ]
+            });
+
+            var container = WidgetById(await Widgets(client, dashboardId), plainContainerId);
+            Assert.False(container.TryGetProperty("parentItemId", out var p) && p.ValueKind != JsonValueKind.Null && !string.IsNullOrEmpty(p.GetString()));
+        }
+
         // Regression test: GetUserDashboard's query must be tracked, otherwise mutating the
         // fetched entity and calling SaveChanges silently persists nothing.
         [Fact]

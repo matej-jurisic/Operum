@@ -1,9 +1,10 @@
-import { ReactNode, useMemo, useRef } from "react";
+import { ReactNode, useCallback, useMemo, useRef } from "react";
 import { MdDragIndicator } from "react-icons/md";
 import { DragDropProvider } from "@dnd-kit/react";
 import {
   GridLayout,
   Layout,
+  LayoutItem,
   useContainerWidth,
   useGridContainer,
   useGridItem,
@@ -21,6 +22,7 @@ import {
 } from "../types/DashboardDto";
 import {
   COLS,
+  CONTAINER_PADDING,
   DASHBOARD_GRID_COLUMNS,
   DRAG_CANCEL_SELECTOR,
   DRAG_HANDLE_CLASS,
@@ -35,6 +37,7 @@ import {
 import "./DashboardGrid.css";
 import { DashboardWidget } from "./DashboardWidget";
 import { DashboardContainerTile } from "./DashboardContainerTile";
+import { TabsContainerTile } from "./TabsContainerTile";
 
 interface Props extends DashboardTileCallbacks {
   widgets: DashboardWidgetDto[];
@@ -126,13 +129,15 @@ function FlatBoard({
   const config = VARIANTS[LayoutVariants.Mobile];
   const cols = COLS[LayoutVariants.Mobile];
 
-  // Containers are flattened away on the narrow grid; a widget set Hidden on mobile is
-  // dropped from it entirely (reachable from the board's hidden-widgets list instead).
+  // Both container kinds are flattened away on the narrow grid (their children just join
+  // the single-column flow); a widget set Hidden on mobile is dropped from it entirely
+  // (reachable from the board's hidden-widgets list instead).
   const shown = useMemo(
     () =>
       widgets.filter(
         (w) =>
           w.type !== WidgetTypes.Container &&
+          w.type !== WidgetTypes.TabsContainer &&
           w.mobileLayout.displayMode !== DashboardItemDisplayMode.Hidden,
       ),
     [widgets],
@@ -218,13 +223,17 @@ function NestedBoard({
     () =>
       new Set(
         widgets
-          .filter((w) => w.type === WidgetTypes.Container)
+          .filter(
+            (w) =>
+              w.type === WidgetTypes.Container ||
+              w.type === WidgetTypes.TabsContainer,
+          )
           .map((w) => w.id),
       ),
     [widgets],
   );
 
-  const { topWidgets, childrenByContainer } = useMemo(() => {
+  const { topWidgets, childrenByContainer, parentById } = useMemo(() => {
     // A widget belongs to a container only if that container still exists; a stale
     // parent (its container was deleted out from under it) falls back to the board.
     const parentOf = (w: DashboardWidgetDto) =>
@@ -234,7 +243,12 @@ function NestedBoard({
 
     const top: DashboardWidgetDto[] = [];
     const byContainer = new Map<string, DashboardWidgetDto[]>();
+    // Where each widget currently lives (container id, or null for the board), read just
+    // before a drop so a widget that changed grids can be told apart from one that only
+    // moved within its own.
+    const byId = new Map<string, string | null>();
     for (const w of widgets) {
+      byId.set(w.id, parentOf(w));
       // A widget set Hidden on the wide grid is dropped from it entirely -- both from the
       // board and from whatever container it belongs to -- and reached from the board's
       // hidden-widgets list instead.
@@ -249,28 +263,90 @@ function NestedBoard({
       list.push(w);
       byContainer.set(parent, list);
     }
-    return { topWidgets: top, childrenByContainer: byContainer };
+    return {
+      topWidgets: top,
+      childrenByContainer: byContainer,
+      parentById: byId,
+    };
   }, [widgets, containerIds]);
+
+  // Each grid's measured inner width, so a widget crossing from one grid to another can
+  // be rescaled to keep its on-screen size. The board's width is known directly; each
+  // container reports its sub-grid's width once mounted.
+  const gridWidths = useRef(new Map<string, number>());
+  const reportGridWidth = useCallback((id: string, w: number) => {
+    gridWidths.current.set(id, w);
+  }, []);
+
+  // The pixel span of one column-plus-gap on the given grid (null for the board). A
+  // widget keeps its size across a move when its width in columns scales by the ratio of
+  // these: same reasoning as CONTAINER_MARGIN matching the board's for height.
+  const colStepOf = (parentItemId: string | null): number | null => {
+    const margin = VARIANTS[LayoutVariants.Desktop].margin[0];
+    if (parentItemId === null) return (width + margin) / DASHBOARD_GRID_COLUMNS;
+    const bodyWidth = gridWidths.current.get(parentItemId);
+    if (!bodyWidth) return null;
+    return (
+      (bodyWidth + margin - CONTAINER_PADDING[0] * 2) / DASHBOARD_GRID_COLUMNS
+    );
+  };
+
+  const clampCol = (v: number, max: number) => Math.max(0, Math.min(max, v));
+
+  // Rescale a just-dropped widget so its width in pixels survives the move between grids
+  // of different widths; leaves a widget that stayed in its own grid untouched.
+  const keepSizeAcrossMove = (
+    item: LayoutItem,
+    from: string | null,
+    to: string | null,
+  ): LayoutItem => {
+    if (from === to) return item;
+    const fromStep = colStepOf(from);
+    const toStep = colStepOf(to);
+    if (!fromStep || !toStep) return item;
+    const scale = fromStep / toStep;
+    if (Math.abs(scale - 1) < 0.05) return item;
+    const w = clampCol(Math.round(item.w * scale), DASHBOARD_GRID_COLUMNS) || 1;
+    const x = clampCol(
+      Math.round(item.x * scale),
+      DASHBOARD_GRID_COLUMNS - w,
+    );
+    return { ...item, w, x };
+  };
 
   // A cross-grid drop reports the item leaving one grid and joining another as two
   // separate layout changes, both fired synchronously. Rather than persist each on its
   // own -- and race them -- each grid drops its latest layout here and one microtask
   // later they are assembled into a single whole-board save.
-  const pending = useRef(new Map<string, Layout>());
+  // Keyed by grid: ROOT_KEY for the board, a container id for a plain container, and
+  // `${containerId}:${tabId}` for one tab of a tabs container. Each entry remembers which
+  // parent (and, for a tabs container, which tab) its rows belong to.
+  const pending = useRef(
+    new Map<
+      string,
+      { parentItemId: string | null; parentTabId: string | null; layout: Layout }
+    >(),
+  );
   const flushQueued = useRef(false);
 
-  const queueSave = (key: string, layout: Layout) => {
+  const queueSave = (
+    key: string,
+    layout: Layout,
+    parentItemId: string | null = null,
+    parentTabId: string | null = null,
+  ) => {
     if (!isConfiguring) return;
-    pending.current.set(key, layout);
+    pending.current.set(key, { parentItemId, parentTabId, layout });
     if (flushQueued.current) return;
     flushQueued.current = true;
     queueMicrotask(() => {
       flushQueued.current = false;
       const items: DashboardLayoutItemDto[] = [];
-      for (const [gridKey, gridLayout] of pending.current) {
-        items.push(
-          ...toLayoutDto(gridLayout, gridKey === ROOT_KEY ? null : gridKey),
+      for (const { parentItemId, parentTabId, layout } of pending.current.values()) {
+        const sized = layout.map((item) =>
+          keepSizeAcrossMove(item, parentById.get(item.i) ?? null, parentItemId),
         );
+        items.push(...toLayoutDto(sized, parentItemId, parentTabId));
       }
       pending.current.clear();
       if (items.length > 0) onLayoutSave(LayoutVariants.Desktop, items);
@@ -294,7 +370,26 @@ function NestedBoard({
               childWidgets={childrenByContainer.get(widget.id) ?? []}
               color={color}
               isConfiguring={isConfiguring}
-              onChildrenArranged={(layout) => queueSave(widget.id, layout)}
+              onChildrenArranged={(layout) =>
+                queueSave(widget.id, layout, widget.id)
+              }
+              onBodyWidth={(w) => reportGridWidth(widget.id, w)}
+              {...callbacks}
+            />
+          ) : widget.type === WidgetTypes.TabsContainer ? (
+            <TabsContainerTile
+              widget={widget}
+              handleRef={handleRef}
+              childWidgets={childrenByContainer.get(widget.id) ?? []}
+              color={color}
+              isConfiguring={isConfiguring}
+              onChildrenArranged={(tabId, layout) =>
+                queueSave(`${widget.id}:${tabId}`, layout, widget.id, tabId)
+              }
+              onBodyWidth={(w) => reportGridWidth(widget.id, w)}
+              onSaveTabs={(dto) =>
+                callbacks.onSaveTabsContainer?.(widget.id, dto)
+              }
               {...callbacks}
             />
           ) : (

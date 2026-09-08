@@ -5,7 +5,7 @@ interface Props {
     itemId: string;
     /** Which text widget this is editing: a header and a container title get a single-line
         input capped short, a note gets a multi-line one with room for a paragraph. */
-    kind: "header" | "note" | "container";
+    kind: "header" | "note" | "container" | "tabsContainer";
     initialText: string;
     color: string;
     onClose: () => void;
@@ -18,6 +18,7 @@ const MAX_LENGTH: Record<Props["kind"], number> = {
     header: 100,
     note: 500,
     container: 100,
+    tabsContainer: 100,
 };
 
 const COPY: Record<Props["kind"], { title: string; label: string; placeholder: string }> = {
@@ -28,6 +29,11 @@ const COPY: Record<Props["kind"], { title: string; label: string; placeholder: s
         placeholder: "Anything worth keeping on the board",
     },
     container: { title: "Rename container", label: "Name", placeholder: "Container" },
+    tabsContainer: {
+        title: "Rename tabs container",
+        label: "Name",
+        placeholder: "Tabs container",
+    },
 };
 
 /**

@@ -148,6 +148,20 @@ namespace Operum.API.Controllers
             return GetApiResponse(await dashboardService.AddContainerItem(dashboardId));
         }
 
+        [HttpPost("{dashboardId}/items/tabs-container")]
+        public async Task<IActionResult> AddTabsContainerItem([FromRoute] string dashboardId)
+        {
+            return GetApiResponse(await dashboardService.AddTabsContainerItem(dashboardId));
+        }
+
+        // A tabs container's title and its whole tab list. Removing a tab moves its child
+        // widgets to the first remaining tab, so the whole board comes back recomputed.
+        [HttpPut("{dashboardId}/items/{itemId}/tabs-container")]
+        public async Task<IActionResult> SaveTabsContainer([FromRoute] string dashboardId, [FromRoute] string itemId, [FromBody] SaveTabsContainerDto dto)
+        {
+            return GetApiResponse(await dashboardService.SaveTabsContainer(dashboardId, itemId, dto));
+        }
+
         // Only the widget's name and how each of its sources is filtered — the definition it
         // was built from stays as it was placed.
         [HttpPut("{dashboardId}/items/{itemId}")]

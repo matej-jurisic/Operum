@@ -1,0 +1,104 @@
+/* A tabs container tile: a bordered panel with a tab strip above a per-tab dashboard grid. */
+
+.tabs-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.tabs-container-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    /* Same reasoning as the plain container header: hold the row at the height its
+       arrange-mode icon buttons need so it doesn't jump as arrange mode toggles. */
+    min-height: calc(1.75rem * var(--mantine-scale) + 12px + 1px);
+    border-bottom: 1px solid var(--mantine-color-default-border);
+    background: var(--mantine-color-default-hover);
+}
+
+/* Only the header drags the panel, and only while the board is being arranged. */
+.tabs-container[data-editing] .tabs-container-header {
+    cursor: grab;
+    touch-action: none;
+}
+
+.tabs-container-grip {
+    color: var(--mantine-color-dimmed);
+    flex-shrink: 0;
+}
+
+.tabs-container-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tabs-container-tabstrip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--mantine-color-default-border);
+}
+
+.tabs-container-tab {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    border-radius: var(--mantine-radius-sm);
+    padding: 0 2px;
+}
+
+.tabs-container-tab[data-active] {
+    background: var(--mantine-color-default-hover);
+}
+
+.tabs-container-tab-label {
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 4px 6px;
+    font-size: var(--mantine-font-size-sm);
+    color: var(--mantine-color-dimmed);
+}
+
+.tabs-container-tab[data-active] .tabs-container-tab-label {
+    color: var(--mantine-color-text);
+    font-weight: 600;
+}
+
+.tabs-container-rename {
+    width: 9rem;
+}
+
+/* No padding: this element is what the sub-grid measures its width from. Its inset comes
+   from the grid's own containerPadding instead. */
+.tabs-container-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* Centered over the empty sub-grid, and never in the way of a drop onto it. */
+.tabs-container-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 12px;
+    pointer-events: none;
+}

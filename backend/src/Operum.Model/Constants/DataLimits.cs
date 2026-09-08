@@ -50,5 +50,10 @@
         public const int MaxHeaderTextLength = 100;
         // A note is read as a paragraph, so it's given the same room a description gets.
         public const int MaxNoteTextLength = 500;
+        // Tabs a single TabsContainer widget may hold, and how long each tab's name can be.
+        // A tab name sits on a strip that has to stay readable at a glance, so it's kept
+        // well under a header's length.
+        public const int MaxDashboardTabCount = 8;
+        public const int MaxTabNameLength = 40;
     }
 }

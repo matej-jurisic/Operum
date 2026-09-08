@@ -25,6 +25,7 @@ import {
     TbHeading,
     TbLayoutGrid,
     TbLayoutBoardSplit,
+    TbLayoutNavbar,
     TbNote,
     TbTable,
 } from "react-icons/tb";
@@ -85,7 +86,14 @@ const TAB_META: { value: TabValue; label: string; icon: IconType }[] = [
 ];
 
 interface InstantOption {
-    key: "quickAdd" | "filter" | "header" | "divider" | "note" | "container";
+    key:
+        | "quickAdd"
+        | "filter"
+        | "header"
+        | "divider"
+        | "note"
+        | "container"
+        | "tabsContainer";
     title: string;
     icon: IconType;
 }
@@ -100,6 +108,7 @@ const LAYOUT_OPTIONS: InstantOption[] = [
     { key: "divider", title: "Divider", icon: MdOutlineHorizontalRule },
     { key: "note", title: "Note", icon: TbNote },
     { key: "container", title: "Container", icon: TbLayoutBoardSplit },
+    { key: "tabsContainer", title: "Tabs container", icon: TbLayoutNavbar },
 ];
 
 function panelTitle(panel: Panel): string {
@@ -156,6 +165,7 @@ export function WidgetLibraryModal({ color, onClose }: Props) {
         addDividerItem,
         addNoteItem,
         addContainerItem,
+        addTabsContainerItem,
     } = useDashboard();
 
     const [trackers, setTrackers] = useState<TrackerDto[]>([]);
@@ -220,13 +230,16 @@ export function WidgetLibraryModal({ color, onClose }: Props) {
         };
 
     const pickInstant = async (key: InstantOption["key"]) => {
-        // Divider and container carry no configuration, so they are placed straight away
+        // Divider and the container widgets carry no configuration to fill in first (a tabs
+        // container's tabs are managed on the board), so they are placed straight away
         // rather than opening a config step.
-        if (key === "divider" || key === "container") {
+        if (key === "divider" || key === "container" || key === "tabsContainer") {
             setAddingInstantKey(key);
             try {
                 await (key === "container"
                     ? addContainerItem()
+                    : key === "tabsContainer"
+                    ? addTabsContainerItem()
                     : addDividerItem());
                 onClose();
             } finally {

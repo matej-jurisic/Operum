@@ -330,7 +330,7 @@ const WIDGET_TYPES = [
         color: "cyan",
         label: "Containers",
         description:
-            "Group widgets into a panel that moves, resizes, and is titled as one.",
+            "Group widgets into a panel, or a set of tabs, that moves, resizes, and is titled as one.",
     },
     {
         icon: <TbArrowsJoin size={20} />,

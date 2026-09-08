@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { ActionIcon, Paper, Text } from "@mantine/core";
 import { MdDelete, MdDragIndicator, MdEdit } from "react-icons/md";
 import { Layout, useContainerWidth } from "@snapgridjs/react";
@@ -25,6 +26,9 @@ interface Props extends DashboardTileCallbacks {
   color: string | undefined;
   isConfiguring: boolean;
   onChildrenArranged: (layout: Layout) => void;
+  /** The measured width of this container's sub-grid, so the board can rescale a widget
+      dragged in from a grid of a different width and keep its on-screen size. */
+  onBodyWidth?: (width: number) => void;
 }
 
 /**
@@ -39,9 +43,15 @@ export function DashboardContainerTile({
   color,
   isConfiguring,
   onChildrenArranged,
+  onBodyWidth,
   ...callbacks
 }: Props) {
   const { width, containerRef, mounted } = useContainerWidth();
+
+  useEffect(() => {
+    if (mounted && width > 0) onBodyWidth?.(width);
+  }, [mounted, width, onBodyWidth]);
+
   const isEmpty = childWidgets.length === 0;
   const name = parseTextWidgetConfig(widget.config)?.text.trim() || "";
   const hasName = name.length > 0;

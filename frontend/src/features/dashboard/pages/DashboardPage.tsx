@@ -32,6 +32,7 @@ import { DashboardProvider, useDashboard } from "../context/DashboardContext";
 import {
     DashboardDto,
     DashboardItemDisplayMode,
+    parseTabsContainerConfig,
     parseTextWidgetConfig,
     WidgetTypes,
 } from "../types/DashboardDto";
@@ -58,6 +59,7 @@ function DashboardContent({
         setFilterValues,
         updateFilterItem,
         setTextContent,
+        saveTabsContainer,
         removeItem,
         saveLayout,
     } = useDashboard();
@@ -218,6 +220,7 @@ function DashboardContent({
                     onRemove={removeItem}
                     onEdit={setEditingItemId}
                     onFilterSetValues={setFilterValues}
+                    onSaveTabsContainer={saveTabsContainer}
                 />
             )}
 
@@ -259,6 +262,28 @@ function DashboardContent({
                 />
             )}
 
+            {editingItemId &&
+                editingWidget &&
+                editingWidget.type === WidgetTypes.TabsContainer && (
+                    <EditTextWidgetModal
+                        itemId={editingItemId}
+                        kind="tabsContainer"
+                        initialText={
+                            parseTabsContainerConfig(editingWidget.config)?.title ?? ""
+                        }
+                        color={color}
+                        onClose={closeEditing}
+                        onSave={(id, text) =>
+                            saveTabsContainer(id, {
+                                title: text,
+                                tabs: (
+                                    parseTabsContainerConfig(editingWidget.config)?.tabs ?? []
+                                ).map((t) => ({ id: t.id, name: t.name })),
+                            })
+                        }
+                    />
+                )}
+
             {editingItemId && editingWidget && editingWidget.type === WidgetTypes.Entries && (
                 <EditEntriesWidgetModal
                     itemId={editingItemId}
@@ -284,6 +309,7 @@ function DashboardContent({
                 editingWidget.type !== WidgetTypes.Header &&
                 editingWidget.type !== WidgetTypes.Note &&
                 editingWidget.type !== WidgetTypes.Container &&
+                editingWidget.type !== WidgetTypes.TabsContainer &&
                 editingWidget.type !== WidgetTypes.Entries &&
                 editingWidget.type !== WidgetTypes.Filter && (
                     <EditWidgetModal

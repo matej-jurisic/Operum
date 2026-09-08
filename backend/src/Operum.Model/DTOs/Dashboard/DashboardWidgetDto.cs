@@ -88,6 +88,9 @@ namespace Operum.Model.DTOs.Dashboard
         // on the board itself. Layout below is then relative to that container's sub-grid.
         // Always null on the narrow grid, where containers are flattened away.
         public string? ParentItemId { get; set; }
+        // When the parent is a TabsContainer, which of its tabs this widget sits in; null
+        // otherwise. Only the active tab's widgets are drawn when the board is read.
+        public string? ParentTabId { get; set; }
         // Placement on the wide grid, in DashboardGrid.Columns columns.
         public DashboardWidgetLayoutDto Layout { get; set; } = new();
         // Placement on the narrow grid, in DashboardGrid.MobileColumns columns. The client

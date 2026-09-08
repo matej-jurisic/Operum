@@ -48,9 +48,22 @@ namespace Operum.Model.Constants
         // Container can never sit inside another Container.
         public const string Container = "container";
 
+        // A Container whose body is split into named tabs: every child names both this item
+        // (DashboardItem.ParentItemId) and one of its tabs (DashboardItem.ParentTabId), and
+        // only the active tab's children render when the board is read. The tab set and the
+        // optional panel title live in Config as a TabsContainerConfigDto. Like a plain
+        // Container it can never sit inside another container of either kind, and a phone
+        // flattens it away the same way.
+        public const string TabsContainer = "tabsContainer";
+
         public static readonly HashSet<string> All =
-            [Analytic, QuickAdd, Entries, Filter, Header, Divider, Note, Container];
+            [Analytic, QuickAdd, Entries, Filter, Header, Divider, Note, Container, TabsContainer];
 
         public static bool IsValid(string type) => All.Contains(type);
+
+        // Whether a widget of this type is a panel that holds a sub-grid of other widgets:
+        // the plain Container and the TabsContainer both are. Used wherever the "can't be
+        // nested, and its children reparent when it's removed" rules apply to either.
+        public static bool IsContainer(string type) => type is Container or TabsContainer;
     }
 }

@@ -25,6 +25,7 @@ import {
     PlaceEntriesWidgetDto,
     PlaceWidgetDto,
     SaveFilterItemDto,
+    SaveTabsContainerDto,
     UpdateDashboardEntriesItemDto,
     UpdateDashboardItemDto,
 } from "../types/DashboardDto";
@@ -60,6 +61,8 @@ type DashboardContextType = {
     addDividerItem: () => Promise<void>;
     addNoteItem: (dto: AddDashboardNoteItemDto) => Promise<void>;
     addContainerItem: () => Promise<void>;
+    addTabsContainerItem: () => Promise<void>;
+    saveTabsContainer: (itemId: string, dto: SaveTabsContainerDto) => Promise<void>;
     updateItem: (itemId: string, dto: UpdateDashboardItemDto) => Promise<void>;
     updateEntriesItem: (itemId: string, dto: UpdateDashboardEntriesItemDto) => Promise<void>;
     setFilterValues: (
@@ -195,6 +198,18 @@ export const DashboardProvider: React.FC<{
         await refreshWidgets();
     };
 
+    const addTabsContainerItem = async () => {
+        await dashboardController.addTabsContainerItem(dashboardId);
+        await refreshWidgets();
+    };
+
+    // Removing a tab moves its child widgets to the first remaining tab, so the server
+    // hands back the whole board recalculated rather than the client guessing what moved.
+    const saveTabsContainer = async (itemId: string, dto: SaveTabsContainerDto) => {
+        const res = await dashboardController.saveTabsContainer(dashboardId, itemId, dto);
+        setWidgets(res.data ?? []);
+    };
+
     // Renders from the response for the same reason setViewSelection below does: an edit
     // can change how a widget is filtered, so the server hands back the whole board
     // recalculated rather than the client guessing at what moved.
@@ -280,6 +295,9 @@ export const DashboardProvider: React.FC<{
                     parentItemId: isMobile
                         ? widget.parentItemId
                         : (placement.parentItemId ?? undefined),
+                    parentTabId: isMobile
+                        ? widget.parentTabId
+                        : (placement.parentTabId ?? undefined),
                     [key]: {
                         ...widget[key],
                         x: placement.x,
@@ -314,6 +332,8 @@ export const DashboardProvider: React.FC<{
                 addDividerItem,
                 addNoteItem,
                 addContainerItem,
+                addTabsContainerItem,
+                saveTabsContainer,
                 updateItem,
                 updateEntriesItem,
                 setFilterValues,

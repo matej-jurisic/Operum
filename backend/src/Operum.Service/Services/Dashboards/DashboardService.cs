@@ -1223,6 +1223,88 @@ namespace Operum.Service.Services.Dashboards
             return Result.Success(MapToItemDto(item));
         }
 
+        // A container whose body is split into tabs. Starts with a single tab and no title;
+        // more tabs, renames and reorders all go through SaveTabsContainer once it's on the
+        // board, so like a plain container it needs nothing but the board's own item limit.
+        public async Task<Result<DashboardItemDto>> AddTabsContainerItem(string dashboardId)
+        {
+            var dashboard = await GetUserDashboard(dashboardId);
+            if (dashboard == null)
+                return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound("dashboard"));
+
+            if (dashboard.Items.Count >= DataLimits.MaxDashboardItemCount)
+                return Result.Failure(ResultStatusCodes.Conflict, Messages.MaxNumberReached("dashboard items", DataLimits.MaxDashboardItemCount));
+
+            var config = JsonSerializer.Serialize(new TabsContainerConfigDto
+            {
+                Tabs = [new TabDefDto { Id = Guid.NewGuid().ToString(), Name = "Tab 1" }]
+            }, ConfigJsonOptions);
+
+            var item = BuildLayoutItem(dashboard, dashboardId, DashboardWidgetTypes.TabsContainer, DashboardGrid.TabsContainerSize, config);
+
+            db.DashboardItems.Add(item);
+            await db.SaveChangesAsync();
+
+            return Result.Success(MapToItemDto(item));
+        }
+
+        // Sets a tabs container's title and its whole tab list at once. A tab kept by id is
+        // renamed in place; a tab with no id (or an unknown one) is created; a tab dropped
+        // from the list is removed and its children repointed to the first tab that
+        // survives. Returns the whole board recomputed, since a removed tab moves child
+        // widgets between tabs.
+        public async Task<Result<List<DashboardWidgetDto>>> SaveTabsContainer(string dashboardId, string itemId, SaveTabsContainerDto dto)
+        {
+            var dashboard = await GetUserDashboard(dashboardId);
+            if (dashboard == null)
+                return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound("dashboard"));
+
+            var item = dashboard.Items.FirstOrDefault(i => i.Id == itemId && i.Type == DashboardWidgetTypes.TabsContainer);
+            if (item == null)
+                return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound("tabs container"));
+
+            if (dto.Tabs.Count is < 1 or > DataLimits.MaxDashboardTabCount)
+                return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("tab count"));
+
+            var existingIds = (TryParseTabsContainerConfig(item.Config)?.Tabs ?? []).Select(t => t.Id).ToHashSet();
+
+            // Reconcile the sent tabs against what the container already has: a matching id
+            // is a rename in place, anything else (missing, unknown, or a duplicate of one
+            // already claimed in this list) is a new tab that gets a fresh id.
+            var claimed = new HashSet<string>();
+            var tabs = dto.Tabs.Select(t =>
+            {
+                var keep = !string.IsNullOrEmpty(t.Id) && existingIds.Contains(t.Id) && claimed.Add(t.Id);
+                return new TabDefDto
+                {
+                    Id = keep ? t.Id! : Guid.NewGuid().ToString(),
+                    Name = t.Name.Trim()
+                };
+            }).ToList();
+
+            if (tabs.Any(t => string.IsNullOrEmpty(t.Name) || t.Name.Length > DataLimits.MaxTabNameLength))
+                return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("tab name"));
+
+            // Children of a tab that no longer exists move to the first surviving tab rather
+            // than off the board -- there is always at least one tab left.
+            var survivingIds = tabs.Select(t => t.Id).ToHashSet();
+            var fallbackTabId = tabs[0].Id;
+            foreach (var child in dashboard.Items.Where(i => i.ParentItemId == item.Id))
+                if (child.ParentTabId == null || !survivingIds.Contains(child.ParentTabId))
+                    child.ParentTabId = fallbackTabId;
+
+            var title = dto.Title?.Trim();
+            item.Config = JsonSerializer.Serialize(new TabsContainerConfigDto
+            {
+                Title = string.IsNullOrEmpty(title) ? null : title,
+                Tabs = tabs
+            }, ConfigJsonOptions);
+
+            await db.SaveChangesAsync();
+
+            return Result.Success(await BuildWidgets(dashboard));
+        }
+
         // Shared by AddHeaderItem and AddNoteItem: both are nothing but a tracker-less
         // widget holding one string of Config, placed the same way a QuickAdd or View
         // widget is — its own row under everything already on the board, on both grids at
@@ -1449,11 +1531,12 @@ namespace Operum.Service.Services.Dashboards
             // count as the board), so offsetting the row by where the container sat drops
             // them roughly where they were; the client's compactor tidies the rest on the
             // next arrange.
-            if (item.Type == DashboardWidgetTypes.Container)
+            if (DashboardWidgetTypes.IsContainer(item.Type))
             {
                 foreach (var child in dashboard.Items.Where(i => i.ParentItemId == item.Id).ToList())
                 {
                     child.ParentItemId = null;
+                    child.ParentTabId = null;
                     child.Y += item.Y;
                     child.X = Math.Min(child.X, Math.Max(0, DashboardGrid.Columns - child.W));
                 }
@@ -1476,9 +1559,17 @@ namespace Operum.Service.Services.Dashboards
             // Which items are containers others may be dropped into. A container can never
             // itself be nested, so it is not a candidate parent for one.
             var containerIds = dashboard.Items
-                .Where(i => i.Type == DashboardWidgetTypes.Container)
+                .Where(i => DashboardWidgetTypes.IsContainer(i.Type))
                 .Select(i => i.Id)
                 .ToHashSet();
+
+            // The tab ids each tabs container holds, in order, so a placement dropped into
+            // one can be pinned to a real tab.
+            var tabOrderByContainer = dashboard.Items
+                .Where(i => i.Type == DashboardWidgetTypes.TabsContainer)
+                .ToDictionary(
+                    i => i.Id,
+                    i => (TryParseTabsContainerConfig(i.Config)?.Tabs ?? []).Select(t => t.Id).ToList());
 
             foreach (var placement in dto.Items)
             {
@@ -1490,13 +1581,22 @@ namespace Operum.Service.Services.Dashboards
                 if (dto.Variant == DashboardLayoutVariants.Desktop)
                 {
                     var wantsParent = placement.ParentItemId;
-                    item.ParentItemId =
+                    var parentOk =
                         wantsParent != null
                         && wantsParent != item.Id
-                        && item.Type != DashboardWidgetTypes.Container
-                        && containerIds.Contains(wantsParent)
-                            ? wantsParent
-                            : null;
+                        && !DashboardWidgetTypes.IsContainer(item.Type)
+                        && containerIds.Contains(wantsParent);
+
+                    item.ParentItemId = parentOk ? wantsParent : null;
+
+                    // A tabs container child is pinned to one of its tabs: the one the client
+                    // named if it's real, otherwise the first tab so the widget stays in the
+                    // panel rather than vanishing to the board. A plain container's child
+                    // carries no tab.
+                    if (parentOk && tabOrderByContainer.TryGetValue(wantsParent!, out var tabIds) && tabIds.Count > 0)
+                        item.ParentTabId = tabIds.Contains(placement.ParentTabId) ? placement.ParentTabId : tabIds[0];
+                    else
+                        item.ParentTabId = null;
                 }
 
                 ApplyPlacement(item, dto.Variant, placement.X, placement.Y, placement.W, placement.H);
@@ -1513,12 +1613,22 @@ namespace Operum.Service.Services.Dashboards
             // in reading order, each block sorted top-left to bottom-right.
             if (dto.Variant == DashboardLayoutVariants.Desktop)
             {
+                // A tabs container's children read tab by tab, then top-left to bottom-right
+                // within each; a plain container's children are just sorted top-left to
+                // bottom-right.
+                int TabRank(DashboardItem c) =>
+                    c.ParentItemId != null
+                    && tabOrderByContainer.TryGetValue(c.ParentItemId, out var tabIds)
+                    && c.ParentTabId != null
+                        ? tabIds.IndexOf(c.ParentTabId)
+                        : 0;
+
                 var childrenByParent = dashboard.Items
                     .Where(i => i.ParentItemId != null)
                     .GroupBy(i => i.ParentItemId!)
                     .ToDictionary(
                         g => g.Key,
-                        g => g.OrderBy(c => c.Y).ThenBy(c => c.X).ToList());
+                        g => g.OrderBy(TabRank).ThenBy(c => c.Y).ThenBy(c => c.X).ToList());
 
                 var order = 0;
                 foreach (var item in dashboard.Items
@@ -1718,6 +1828,7 @@ namespace Operum.Service.Services.Dashboards
             Order = item.Order,
             Type = item.Type,
             ParentItemId = item.ParentItemId,
+            ParentTabId = item.ParentTabId,
             Layout = MapToLayoutDto(item),
             MobileLayout = MapToMobileLayoutDto(item),
             Config = item.Config,
@@ -1797,6 +1908,7 @@ namespace Operum.Service.Services.Dashboards
             Id = item.Id,
             Type = item.Type,
             ParentItemId = item.ParentItemId,
+            ParentTabId = item.ParentTabId,
             Layout = MapToLayoutDto(item),
             MobileLayout = MapToMobileLayoutDto(item),
             Config = item.Config,
@@ -1830,6 +1942,21 @@ namespace Operum.Service.Services.Dashboards
             try
             {
                 return JsonSerializer.Deserialize<FilterWidgetConfigDto>(config, ConfigJsonOptions);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        private static TabsContainerConfigDto? TryParseTabsContainerConfig(string? config)
+        {
+            if (string.IsNullOrEmpty(config))
+                return null;
+
+            try
+            {
+                return JsonSerializer.Deserialize<TabsContainerConfigDto>(config, ConfigJsonOptions);
             }
             catch (JsonException)
             {

@@ -86,9 +86,13 @@ namespace Operum.Model.Constants
         // than a full row -- room for roughly eight lines before it scrolls.
         public static readonly (int Width, int Height) NoteSize = (8, 12);
 
-        // A container starts as a full-width band tall enough to arrange a couple of rows
-        // of widgets inside. A nested widget's placement is stored in the same Columns as a
-        // top-level one, so the sub-grid needs no bounds of its own.
-        public static readonly (int Width, int Height) ContainerSize = (Columns, 40);
+        // A container starts as a full-width band tall enough to hold a row of widgets with
+        // room to drop another below. A nested widget's placement is stored in the same
+        // Columns as a top-level one, so the sub-grid needs no bounds of its own.
+        public static readonly (int Width, int Height) ContainerSize = (Columns, 30);
+
+        // A tabs container is a plain container plus the tab strip above its sub-grid, so it
+        // starts a few rows taller to leave the first tab the same room to work in.
+        public static readonly (int Width, int Height) TabsContainerSize = (Columns, 34);
     }
 }

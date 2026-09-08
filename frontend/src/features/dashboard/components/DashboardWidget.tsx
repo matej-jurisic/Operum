@@ -219,9 +219,10 @@ export function DashboardWidget({
                 />
             );
         case WidgetTypes.Container:
-            // A container's sub-grid is drawn by DashboardContainerTile, which the grid
-            // renders in place of this card. Nothing to draw here, and on the narrow grid
-            // a container is dropped entirely.
+        case WidgetTypes.TabsContainer:
+            // A container's sub-grid is drawn by DashboardContainerTile / TabsContainerTile,
+            // which the grid renders in place of this card. Nothing to draw here, and on the
+            // narrow grid a container is dropped entirely.
             return null;
         case WidgetTypes.Note:
             return (

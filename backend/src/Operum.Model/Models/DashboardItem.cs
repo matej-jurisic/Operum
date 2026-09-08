@@ -74,6 +74,13 @@ namespace Operum.Model.Models
         public virtual DashboardItem? ParentItem { get; set; }
         public virtual List<DashboardItem> Children { get; set; } = [];
 
+        // Which tab of the parent this item sits in, when the parent is a TabsContainer.
+        // Null for a plain Container's child or a board-level item. It names a tab id in the
+        // parent's Config (TabsContainerConfigDto.Tabs), not a row, so there is no FK. When a
+        // tab is deleted its children are repointed to the first surviving tab rather than
+        // cleared; when the whole container is removed this is nulled alongside ParentItemId.
+        public string? ParentTabId { get; set; }
+
         // The shared chart definition this Analytic-type item places on the board. Deleting
         // the Widget takes every placement of it with it (see OperumContext) -- a placement
         // can't render without a definition.

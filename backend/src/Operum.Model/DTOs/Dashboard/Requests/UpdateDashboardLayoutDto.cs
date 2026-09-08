@@ -14,6 +14,10 @@ namespace Operum.Model.DTOs.Dashboard.Requests
         // container, or that isn't a container on this board, is dropped and the item lands
         // on the board itself.
         public string? ParentItemId { get; set; }
+        // When ParentItemId names a TabsContainer, which of its tabs this placement sits in.
+        // Ignored for a plain Container or a board-level spot, and on the narrow grid. A tab
+        // id the container doesn't have is dropped and the item lands on the board itself.
+        public string? ParentTabId { get; set; }
         public int X { get; set; }
         public int Y { get; set; }
         public int W { get; set; }

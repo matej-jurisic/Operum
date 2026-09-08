@@ -9,6 +9,9 @@ namespace Operum.Model.DTOs.Dashboard
         // The Container item this one sits inside on the wide grid, or null when it sits on
         // the board itself.
         public string? ParentItemId { get; set; }
+        // When the parent is a TabsContainer, which of its tabs this item sits in; null
+        // otherwise.
+        public string? ParentTabId { get; set; }
         public DashboardWidgetLayoutDto Layout { get; set; } = new();
         public DashboardWidgetLayoutDto MobileLayout { get; set; } = new();
         public string? Config { get; set; }

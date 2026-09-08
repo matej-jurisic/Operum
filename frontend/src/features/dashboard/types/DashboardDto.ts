@@ -13,6 +13,7 @@ export const WidgetTypes = {
     Divider: "divider",
     Note: "note",
     Container: "container",
+    TabsContainer: "tabsContainer",
 } as const;
 
 /** The Config payload shared by WidgetTypes.Header, WidgetTypes.Note and (as its optional
@@ -34,6 +35,43 @@ export function parseTextWidgetConfig(
     } catch {
         return null;
     }
+}
+
+/** One tab of a WidgetTypes.TabsContainer. `id` is opaque; the child widgets in this tab
+    carry it as their `parentTabId`. */
+export interface TabDef {
+    id: string;
+    name: string;
+}
+
+/** The Config payload of a WidgetTypes.TabsContainer widget: the panel's optional title and
+    its ordered tab set (there is always at least one). */
+export interface TabsContainerConfig {
+    title?: string;
+    tabs: TabDef[];
+}
+
+/** Config is free-form JSON per widget type, same caveat as parseTextWidgetConfig. */
+export function parseTabsContainerConfig(
+    config: string | undefined,
+): TabsContainerConfig | null {
+    if (!config) return null;
+    try {
+        const parsed = JSON.parse(config);
+        return Array.isArray(parsed?.tabs)
+            ? { title: parsed.title ?? undefined, tabs: parsed.tabs }
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+/** Sets a WidgetTypes.TabsContainer's title and full tab list. A tab sent with an existing
+    `id` is renamed in place; one with no `id` is created; a tab left out is removed and its
+    widgets move to the first remaining tab. */
+export interface SaveTabsContainerDto {
+    title?: string;
+    tabs: { id?: string; name: string }[];
 }
 
 /** The Config payload of a WidgetTypes.QuickAdd widget: which tracker its button opens
@@ -229,6 +267,9 @@ export interface DashboardWidgetDto {
         when it sits on the board itself. Always absent on the narrow grid, which flattens
         containers away. */
     parentItemId?: string;
+    /** When the parent is a WidgetTypes.TabsContainer, which of its tabs this widget sits
+        in. Only the active tab's widgets are drawn. Absent otherwise. */
+    parentTabId?: string;
     layout: DashboardWidgetLayoutDto;
     mobileLayout: DashboardWidgetLayoutDto;
     config?: string;
@@ -244,6 +285,8 @@ export interface DashboardLayoutItemDto extends WidgetLayoutDto {
     /** The container this placement is inside, or null for a spot on the board itself.
         Only sent for the wide grid. */
     parentItemId?: string | null;
+    /** When parentItemId is a tabs container, which of its tabs. Ignored otherwise. */
+    parentTabId?: string | null;
 }
 
 export interface UpdateDashboardLayoutDto {
@@ -291,6 +334,9 @@ export interface DashboardItemDto {
     id: string;
     order: number;
     type: string;
+    parentItemId?: string;
+    /** When the parent is a tabs container, which of its tabs this item sits in. */
+    parentTabId?: string;
     layout: DashboardWidgetLayoutDto;
     mobileLayout: DashboardWidgetLayoutDto;
     config?: string;

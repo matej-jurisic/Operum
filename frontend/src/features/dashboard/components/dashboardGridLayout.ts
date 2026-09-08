@@ -3,6 +3,7 @@ import {
   DashboardWidgetDto,
   LayoutVariant,
   LayoutVariants,
+  SaveTabsContainerDto,
 } from "../types/DashboardDto";
 import type { Layout, LayoutItem } from "@snapgridjs/react";
 
@@ -36,9 +37,11 @@ export const DRAG_HANDLE_CLASS = "dashboard-drag-handle";
 export const DRAG_CANCEL_SELECTOR =
   "button, a, input, .mantine-ActionIcon-root";
 
-// The gap between cells inside a container: tighter than the board's own, since a
-// container is already a framed region.
-export const CONTAINER_MARGIN: [number, number] = [8, 8];
+// The gap between cells inside a container. It must match the board's own margin (see
+// VARIANTS[Desktop]), not just look reasonable on its own: with a 2px row height the
+// vertical gap is almost the entire row step, so a smaller one here would render every
+// widget dragged in from the board at a fraction of its height on the board.
+export const CONTAINER_MARGIN: [number, number] = [16, 16];
 
 // The inset between a container's frame and its sub-grid. Applied as the grid's own
 // padding, not CSS padding on the body, so the width the grid is measured at is the
@@ -130,10 +133,12 @@ export const toLayoutItem = (
 export const toLayoutDto = (
   layout: Layout,
   parentItemId: string | null,
+  parentTabId: string | null = null,
 ): DashboardLayoutItemDto[] =>
   layout.map((item) => ({
     itemId: item.i,
     parentItemId,
+    parentTabId,
     x: item.x,
     y: item.y,
     w: item.w,
@@ -148,4 +153,6 @@ export interface DashboardTileCallbacks {
     itemId: string,
     values: Record<string, string | null>,
   ) => void;
+  /** Saves a tabs container's title + tab list (add / rename / reorder / delete). */
+  onSaveTabsContainer?: (itemId: string, dto: SaveTabsContainerDto) => void;
 }
