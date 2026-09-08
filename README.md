@@ -152,3 +152,11 @@ cd frontend && npm install && npm run dev
 Backend: .NET 9, ASP.NET Core, Entity Framework Core, PostgreSQL  
 Frontend: React 19, TypeScript, Vite, Mantine, MobX  
 Infrastructure: Docker, Nginx, Prometheus, Grafana
+
+---
+
+## License
+
+Copyright (C) 2026 Matej Jurišić
+
+Operum is free software licensed under the GNU Affero General Public License v3.0. You may run, study, share, and modify it under the terms of the AGPL-3.0. Because it is an AGPL work, anyone who runs a modified version to provide a network service must also make the modified source available to that service's users. See [LICENSE](LICENSE) for the full text.
