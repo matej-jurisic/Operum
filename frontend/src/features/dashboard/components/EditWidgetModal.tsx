@@ -7,7 +7,7 @@ import {
     Text,
     TextInput,
 } from "@mantine/core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { viewsController } from "../../views/api/viewsController";
 import { ViewDto } from "../../views/types/ViewDto";
 import { dashboardController } from "../api/dashboardController";
@@ -15,12 +15,18 @@ import { useDashboard } from "../context/DashboardContext";
 import {
     DashboardItemDisplayMode,
     DashboardItemSourceDto,
+    GoalConditionalTargetDto,
+    parseFilterWidgetConfig,
     UpdateDashboardItemDto,
     WidgetTypes,
 } from "../types/DashboardDto";
 import { WidgetDisplayModeFields } from "./WidgetDisplayModeFields";
 import { SourceViewSelect } from "./SourceViewSelect";
 import { YAxisScaleOption } from "./YAxisScaleOption";
+import {
+    ConnectedClause,
+    GoalConditionalTargetsEditor,
+} from "./GoalConditionalTargetsEditor";
 import { AnalyticResultTypeEnum } from "../../analytics/enums/AnalyticResultTypeEnum";
 
 interface Props {
@@ -45,7 +51,7 @@ interface SourceRow {
  * widget rather than quietly turning this one into something else.
  */
 export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
-    const { dashboardId } = useDashboard();
+    const { dashboardId, widgets } = useDashboard();
     const [rows, setRows] = useState<SourceRow[] | null>(null);
     const [displayMode, setDisplayMode] = useState(DashboardItemDisplayMode.Full);
     const [mobileDisplayMode, setMobileDisplayMode] = useState(
@@ -53,8 +59,41 @@ export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
     );
     const [isLineChart, setIsLineChart] = useState(false);
     const [isCalendar, setIsCalendar] = useState(false);
+    const [isGoal, setIsGoal] = useState(false);
     const [yAxisFromZero, setYAxisFromZero] = useState(true);
+    const [conditionalTargets, setConditionalTargets] = useState<
+        GoalConditionalTargetDto[]
+    >([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // The filter clauses this placement follows -- the only clauses a conditional target is
+    // allowed to key off. Read from the board's filter widgets, whose config links name the
+    // widgets that follow them.
+    const connectedClauses = useMemo<ConnectedClause[]>(() => {
+        const out: ConnectedClause[] = [];
+        const seen = new Set<string>();
+        for (const w of widgets) {
+            if (w.type !== WidgetTypes.Filter || !w.filter) continue;
+            const config = parseFilterWidgetConfig(w.config);
+            if (!config) continue;
+            const followed = new Set(
+                config.links
+                    .filter((l) => l.itemId === itemId)
+                    .flatMap((l) => Object.keys(l.fieldByQuery)),
+            );
+            for (const clause of w.filter.clauses) {
+                if (followed.has(clause.queryId) && !seen.has(clause.queryId)) {
+                    seen.add(clause.queryId);
+                    out.push({
+                        queryId: clause.queryId,
+                        dataType: clause.dataType,
+                        operator: clause.operator,
+                    });
+                }
+            }
+        }
+        return out;
+    }, [widgets, itemId]);
 
     // The board's render endpoint carries the calculated charts, not the definitions
     // behind them, so the sources being edited are read from the dashboard itself.
@@ -93,7 +132,9 @@ export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
             setMobileDisplayMode(item.mobileLayout.displayMode);
             setIsLineChart(item.resultType === AnalyticResultTypeEnum.LineChart);
             setIsCalendar(item.resultType === AnalyticResultTypeEnum.Calendar);
+            setIsGoal(item.resultType === AnalyticResultTypeEnum.Goal);
             setYAxisFromZero(item.yAxisFromZero);
+            setConditionalTargets(item.goalConditionalTargets ?? []);
         };
 
         load();
@@ -119,6 +160,7 @@ export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
                 displayMode,
                 mobileDisplayMode,
                 yAxisFromZero,
+                goalConditionalTargets: isGoal ? conditionalTargets : [],
                 sources: rows.map((row) => ({
                     sourceId: row.source.id,
                     label: row.label.trim() || null,
@@ -213,6 +255,14 @@ export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
                         <YAxisScaleOption
                             yAxisFromZero={yAxisFromZero}
                             onChange={setYAxisFromZero}
+                        />
+                    )}
+
+                    {isGoal && connectedClauses.length > 0 && (
+                        <GoalConditionalTargetsEditor
+                            clauses={connectedClauses}
+                            value={conditionalTargets}
+                            onChange={setConditionalTargets}
                         />
                     )}
 

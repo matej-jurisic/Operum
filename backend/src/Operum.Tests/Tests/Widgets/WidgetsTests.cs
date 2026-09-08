@@ -37,6 +37,67 @@ namespace Operum.Tests.Tests.Widgets
             ]
         };
 
+        private static CreateWidgetDto GoalWidgetDto(string trackerId, string fieldId, string? target, string code = AnalyticCodes.Sum) => new()
+        {
+            ResultType = AnalyticTypes.Goal,
+            Code = code,
+            GoalTarget = target,
+            Sources =
+            [
+                new CreateWidgetSourceRequestDto
+                {
+                    TrackerId = trackerId,
+                    Fields = [new CreateAnalyticFieldDto { FieldId = fieldId, Purpose = AnalyticPurposes.Value }]
+                }
+            ]
+        };
+
+        [Fact]
+        public async Task CreateWidget_Goal_StoresTheTarget()
+        {
+            var client = await OwnerClient();
+            var (trackerId, fieldId) = await CreateTrackerWithField(client);
+
+            var response = await client.PostAsJsonAsync("widgets", GoalWidgetDto(trackerId, fieldId, "100"));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var widget = await TestApi.Data(response);
+            Assert.Equal("Goal", widget.GetProperty("resultType").GetString());
+            Assert.Equal("100", widget.GetProperty("goalTarget").GetString());
+        }
+
+        [Fact]
+        public async Task CreateWidget_GoalWithoutTarget_ReturnsBadRequest()
+        {
+            var client = await OwnerClient();
+            var (trackerId, fieldId) = await CreateTrackerWithField(client);
+
+            var response = await client.PostAsJsonAsync("widgets", GoalWidgetDto(trackerId, fieldId, null));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task CreateWidget_GoalWithNonNumericTarget_ReturnsBadRequest()
+        {
+            var client = await OwnerClient();
+            var (trackerId, fieldId) = await CreateTrackerWithField(client);
+
+            var response = await client.PostAsJsonAsync("widgets", GoalWidgetDto(trackerId, fieldId, "soon"));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateWidget_Goal_ChangesTheTarget()
+        {
+            var client = await OwnerClient();
+            var (trackerId, fieldId) = await CreateTrackerWithField(client);
+            var widgetId = await TestApi.IdOf(await client.PostAsJsonAsync("widgets", GoalWidgetDto(trackerId, fieldId, "100")));
+
+            var response = await client.PutAsJsonAsync($"widgets/{widgetId}", new UpdateWidgetDto { GoalTarget = "250" });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("250", (await TestApi.Data(response)).GetProperty("goalTarget").GetString());
+        }
+
         [Fact]
         public async Task CreateWidget_WithoutName_FallsBackToTheDefinitionLabel()
         {

@@ -31,6 +31,9 @@ namespace Operum.Model.DTOs.Dashboard
         // data's own range. Lets an edit form preload the current choice without a second
         // fetch — see EditWidgetModal.
         public bool YAxisFromZero { get; set; } = true;
+        // Goal widgets only: the placement's conditional targets, in order. Empty when none
+        // are set. Lets the edit form preload them without a second fetch.
+        public List<GoalConditionalTargetDto> GoalConditionalTargets { get; set; } = [];
         public List<DashboardItemSourceDto> Sources { get; set; } = [];
     }
 }

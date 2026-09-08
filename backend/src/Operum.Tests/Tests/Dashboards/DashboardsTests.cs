@@ -212,6 +212,145 @@ namespace Operum.Tests.Tests.Dashboards
         }
 
         [Fact]
+        public async Task CreateAndPlaceWidget_Goal_RendersProgressTowardTheTarget()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("goalprogress");
+
+            var tracker = await CreateCapableTracker(client, "Savings");
+            // CreateCapableTracker already logged Amount 5; another 25 brings the sum to 30.
+            await AddEntry(client, tracker.Id, "2026-01-02", "25");
+
+            var dashboardId = await CreateDashboard(client);
+
+            var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.Goal,
+                Code = AnalyticCodes.Sum,
+                GoalTarget = "60",
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields = [new CreateAnalyticFieldDto { FieldId = tracker.AmountFieldId, Purpose = AnalyticPurposes.Value }]
+                    }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
+
+            var analytic = Analytic((await Widgets(client, dashboardId))[0]);
+            Assert.Equal(AnalyticTypes.Goal, analytic.GetProperty("resultType").GetString());
+            Assert.Equal("60", analytic.GetProperty("target").GetString());
+            Assert.Equal(0.5, analytic.GetProperty("progress").GetDouble(), 3);
+        }
+
+        [Fact]
+        public async Task Goal_ConditionalTarget_ReplacesTheDefaultWhenAFollowedFilterMatches()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("goalconditional");
+
+            var tracker = await CreateCapableTracker(client, "Focus");
+            var dashboardId = await CreateDashboard(client);
+
+            var goalItem = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.Goal,
+                Code = AnalyticCodes.Sum,
+                GoalTarget = "60",
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields = [new CreateAnalyticFieldDto { FieldId = tracker.AmountFieldId, Purpose = AnalyticPurposes.Value }]
+                    }
+                ]
+            }));
+            var goalId = goalItem.GetProperty("id").GetString()!;
+            var sourceId = goalItem.GetProperty("sources")[0].GetProperty("id").GetString()!;
+
+            // A filter on Amount, followed by the goal.
+            var filter = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items/filter", new SaveFilterItemDto
+            {
+                Clauses = AmountOverClauses(),
+                Links =
+                [
+                    new WidgetLinkDto
+                    {
+                        ItemId = goalId,
+                        TrackerId = tracker.Id,
+                        FieldByQuery = new() { ["0"] = tracker.AmountFieldId }
+                    }
+                ]
+            }));
+            var filterId = filter.GetProperty("id").GetString()!;
+            var queryId = await FilterQueryId(client, dashboardId, filterId);
+
+            // When that filter is set to "1", aim for 999 instead of the default 60.
+            var update = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{goalId}", new UpdateDashboardItemDto
+            {
+                Sources = [new UpdateDashboardItemSourceDto { SourceId = sourceId }],
+                GoalConditionalTargets =
+                [
+                    new GoalConditionalTargetDto { Conditions = new() { [queryId] = "1" }, Target = "999" }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+
+            // Filter unset: the default target.
+            Assert.Equal("60", Analytic(ChartFor(await Widgets(client, dashboardId), goalId)).GetProperty("target").GetString());
+
+            // Filter set to the matching value: the conditional target wins.
+            var narrowed = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [queryId] = "1" } });
+            Assert.Equal("999", Analytic(ChartFor(await Data(narrowed), goalId)).GetProperty("target").GetString());
+
+            // A different value: no row matches, back to the default.
+            var other = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [queryId] = "2" } });
+            Assert.Equal("60", Analytic(ChartFor(await Data(other), goalId)).GetProperty("target").GetString());
+        }
+
+        [Fact]
+        public async Task Goal_ConditionalTarget_ForAnUnfollowedClause_IsRejected()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("goalconditionalreject");
+
+            var tracker = await CreateCapableTracker(client, "Focus");
+            var dashboardId = await CreateDashboard(client);
+
+            var goalItem = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.Goal,
+                Code = AnalyticCodes.Sum,
+                GoalTarget = "60",
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields = [new CreateAnalyticFieldDto { FieldId = tracker.AmountFieldId, Purpose = AnalyticPurposes.Value }]
+                    }
+                ]
+            }));
+            var goalId = goalItem.GetProperty("id").GetString()!;
+            var sourceId = goalItem.GetProperty("sources")[0].GetProperty("id").GetString()!;
+
+            var rejected = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{goalId}", new UpdateDashboardItemDto
+            {
+                Sources = [new UpdateDashboardItemSourceDto { SourceId = sourceId }],
+                GoalConditionalTargets =
+                [
+                    new GoalConditionalTargetDto { Conditions = new() { ["not-a-followed-clause"] = "1" }, Target = "999" }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        }
+
+        [Fact]
         public async Task CreateAndPlaceWidget_TwoSources_MergesIntoComposedChart()
         {
             var client = _factory.CreateClientWithCookies();

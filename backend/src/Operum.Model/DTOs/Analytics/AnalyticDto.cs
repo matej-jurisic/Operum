@@ -5,6 +5,7 @@ namespace Operum.Model.DTOs.Analytics
 {
     [JsonPolymorphic(TypeDiscriminatorPropertyName = nameof(ResultType))]
     [JsonDerivedType(typeof(SingleValueAnalyticDto), AnalyticTypes.SingleValue)]
+    [JsonDerivedType(typeof(GoalAnalyticDto), AnalyticTypes.Goal)]
     [JsonDerivedType(typeof(LineChartAnalyticDto), AnalyticTypes.LineChart)]
     [JsonDerivedType(typeof(ScatterPlotAnalyticDto), AnalyticTypes.ScatterChart)]
     [JsonDerivedType(typeof(CalendarAnalyticDto), AnalyticTypes.Calendar)]

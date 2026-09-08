@@ -49,6 +49,8 @@ namespace Operum.Model.Constants
         {
             // A single number reads as well small as large; header + a line of value.
             AnalyticTypes.SingleValue => (6, 8),
+            // A goal is that same number plus a progress bar and its target underneath.
+            AnalyticTypes.Goal => (7, 11),
             // A donut reads best near-square -- ~450px wide, ~290px of it plot + legend.
             AnalyticTypes.Donut => (8, 18),
             // A month grid can't reflow: it's ~280x250px whatever cell it sits in, so a

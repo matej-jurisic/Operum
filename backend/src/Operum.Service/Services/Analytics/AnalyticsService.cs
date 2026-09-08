@@ -24,6 +24,7 @@ namespace Operum.Service.Services.Analytics
                 ResultTypes = [.. AnalyticDefinitionList.ByResultType.Select(rt => new AnalyticConfigType
                 {
                     Name = rt.Key,
+                    WidgetOnly = rt.Value.WidgetOnly,
                     Codes = [.. rt.Value.Codes.Select(code => new AnalyticConfigCode
                     {
                         Code = code.Key,
@@ -52,6 +53,11 @@ namespace Operum.Service.Services.Analytics
 
             if (!AnalyticDefinitionList.IsValidForType(dto.ResultType, dto.Code))
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("code for this result type"));
+
+            // A Goal needs a target to be worth anything, and that only exists on a saved
+            // Widget -- there's nothing to evaluate ad hoc.
+            if (dto.ResultType == AnalyticTypes.Goal)
+                return Result.Failure(ResultStatusCodes.BadRequest, Messages.NotAllowed("evaluating a goal without a saved target"));
 
             var isPaired = AnalyticTypes.RequiresPairedSources(dto.ResultType, dto.Code);
 

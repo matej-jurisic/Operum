@@ -53,6 +53,13 @@ namespace Operum.Model.Models
         // top of a 0-based axis. Ignored by every other widget type.
         public bool YAxisFromZero { get; set; } = true;
 
+        // Goal widgets only: an ordered JSON list of GoalConditionalTargetDto -- a target to
+        // use instead of the Widget's default when the board's currently-set values for the
+        // filter clauses this placement follows match the row's. Board-scoped (it names this
+        // board's pooled query ids), so it lives on the placement rather than the shared
+        // Widget. Null or "[]" means the default target always applies.
+        public string? GoalConditionalTargets { get; set; }
+
         public string DashboardId { get; set; } = string.Empty;
         [ForeignKey(nameof(DashboardId))]
         public virtual Dashboard Dashboard { get; set; } = null!;

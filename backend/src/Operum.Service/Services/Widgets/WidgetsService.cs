@@ -55,6 +55,13 @@ namespace Operum.Service.Services.Widgets
             if (!AnalyticDefinitionList.IsValidForType(dto.ResultType, dto.Code))
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("code for this result type"));
 
+            // A Goal is a single-source Single Value calculation plus a target. The target is
+            // required and has to be a number or an hh:mm:ss duration; whether it matches the
+            // value field's type is settled once BuildSourceFields has resolved that field.
+            var goalTarget = dto.ResultType == AnalyticTypes.Goal ? dto.GoalTarget?.Trim() : null;
+            if (dto.ResultType == AnalyticTypes.Goal && !GoalTargets.IsParseable(goalTarget))
+                return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("goal target, which must be a number or an hh:mm:ss duration"));
+
             // Only some calculations combine more than one tracker: line/bar merge into a
             // Composed chart, a calendar unions its dated events, and a correlation scatter
             // pairs exactly two trackers on a shared match field.
@@ -93,6 +100,20 @@ namespace Operum.Service.Services.Widgets
                 sources.Add(source);
             }
 
+            // The target has to be readable as the same kind of magnitude the calculation
+            // produces: a duration for Sum/Average/Min/Max over a duration field, a plain
+            // number for everything else (the counts always come out as numbers).
+            if (dto.ResultType == AnalyticTypes.Goal)
+            {
+                var valueFieldId = sources[0].Fields.FirstOrDefault(f => f.Purpose == AnalyticPurposes.Value)?.FieldId;
+                var valueField = valueFieldId != null
+                    ? await db.Fields.FirstOrDefaultAsync(f => f.Id == valueFieldId)
+                    : null;
+
+                if (!GoalTargets.MatchesFieldType(dto.Code, valueField?.Type, goalTarget!))
+                    return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("goal target for this field's type"));
+            }
+
             var widget = new Widget
             {
                 Name = dto.Name?.Trim() ?? string.Empty,
@@ -100,6 +121,7 @@ namespace Operum.Service.Services.Widgets
                 ResultType = dto.ResultType,
                 Code = dto.Code,
                 MatchedValuesOnly = dto.MatchedValuesOnly,
+                GoalTarget = goalTarget,
                 OwnerId = user.Id,
                 Sources = sources
             };
@@ -119,6 +141,24 @@ namespace Operum.Service.Services.Widgets
 
             widget.Name = dto.Name?.Trim() ?? string.Empty;
             widget.Description = dto.Description?.Trim() ?? string.Empty;
+
+            // Only a Goal has a target, and only when the caller sends a new one. Its type
+            // has to line up with the value field the same way it did at creation.
+            if (widget.ResultType == AnalyticTypes.Goal && dto.GoalTarget != null)
+            {
+                var target = dto.GoalTarget.Trim();
+                var valueFieldId = widget.Sources
+                    .SelectMany(s => s.Fields)
+                    .FirstOrDefault(f => f.Purpose == AnalyticPurposes.Value)?.FieldId;
+                var valueField = valueFieldId != null
+                    ? await db.Fields.FirstOrDefaultAsync(f => f.Id == valueFieldId)
+                    : null;
+
+                if (!GoalTargets.IsParseable(target) || !GoalTargets.MatchesFieldType(widget.Code, valueField?.Type, target))
+                    return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("goal target for this field's type"));
+
+                widget.GoalTarget = target;
+            }
 
             // The DbContext defaults to QueryTrackingBehavior.NoTracking (see
             // DatabaseConfiguration), so the mutation above is invisible to SaveChangesAsync
@@ -294,6 +334,7 @@ namespace Operum.Service.Services.Widgets
             ResultType = w.ResultType,
             Code = w.Code,
             MatchedValuesOnly = w.MatchedValuesOnly,
+            GoalTarget = w.GoalTarget,
             Sources = w.Sources.OrderBy(s => s.Order).Select(s => MapSourceToDto(w, s)).ToList()
         };
 

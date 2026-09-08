@@ -111,6 +111,91 @@ namespace Operum.Model.Constants.Analytics.Definitions
                     }
                 },
 
+                // A Goal is a Single Value calculation drawn as progress toward a target.
+                // Same purpose and the same calculations, minus the ones whose result isn't a
+                // number to compare (Most/Least Common). The target is typed when the Widget
+                // is created and stored on it; see GoalAnalyticBuilder.
+                [AnalyticTypes.Goal] = new AnalyticDefinition
+                {
+                    WidgetOnly = true,
+                    Purposes = [AnalyticPurposes.Value],
+                    Codes = new()
+                    {
+                        [AnalyticCodes.Count] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Count",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [.. DataTypes.All]
+                            }
+                        },
+                        [AnalyticCodes.CountDistinct] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Unique Count",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [.. DataTypes.All]
+                            }
+                        },
+                        [AnalyticCodes.Sum] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Sum",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
+                            }
+                        },
+                        [AnalyticCodes.Average] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Average",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
+                            }
+                        },
+                        [AnalyticCodes.Min] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Minimum",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
+                            }
+                        },
+                        [AnalyticCodes.Max] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Maximum",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
+                            }
+                        },
+                        [AnalyticCodes.TrueCount] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Yes Count",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [DataTypes.Bool]
+                            }
+                        },
+                        [AnalyticCodes.FalseCount] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "No Count",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [DataTypes.Bool]
+                            }
+                        },
+                        [AnalyticCodes.TruePercentage] = new AnalyticPurposeDataTypes
+                        {
+                            Label = "Yes Percentage",
+                            AllowedDataTypes = new()
+                            {
+                                [AnalyticPurposes.Value] = [DataTypes.Bool]
+                            }
+                        }
+                    }
+                },
+
                 [AnalyticTypes.LineChart] = new AnalyticDefinition
                 {
                     Purposes = [AnalyticPurposes.Xaxis, AnalyticPurposes.Yaxis],

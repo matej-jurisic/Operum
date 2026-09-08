@@ -29,6 +29,9 @@ export interface WidgetDto {
     /** Combined charts only: whether the chart is restricted to x-axis values shared by
         every source. */
     matchedValuesOnly: boolean;
+    /** Goal widgets only: the target the value is shown as progress toward, in the value
+        field's format (a number, or hh:mm:ss for a duration). */
+    goalTarget?: string;
     sources: WidgetSourceDto[];
 }
 
@@ -52,14 +55,19 @@ export interface CreateWidgetDto {
     resultType: string;
     code: string;
     matchedValuesOnly?: boolean;
+    /** Goal widgets only, and required for them: a number or an hh:mm:ss duration. */
+    goalTarget?: string;
     sources: CreateWidgetSourceRequestDto[];
 }
 
-/** Edits a widget's name/description only -- the definition (result type, code, sources,
-    field mapping) is fixed at creation. Create a new widget instead of changing it. */
+/** Edits a widget's name/description, plus a Goal's target -- the rest of the definition
+    (result type, code, sources, field mapping) is fixed at creation. Create a new widget
+    instead of changing it. */
 export interface UpdateWidgetDto {
     name?: string;
     description?: string;
+    /** Goal widgets only. Omitted, the current target is kept. */
+    goalTarget?: string;
 }
 
 export interface CreateEntriesWidgetDto {

@@ -278,6 +278,15 @@ export interface DashboardItemSourceDto {
     order: number;
 }
 
+/** One row of a goal placement's conditional targets. `conditions` maps a followed filter
+    clause's pooled query id to the value it must currently be set to on the board for this
+    row to apply; a clause not mentioned is a wildcard. Rows are evaluated in order, first
+    full match wins, and its `target` replaces the widget's default. */
+export interface GoalConditionalTargetDto {
+    conditions: Record<string, string>;
+    target: string;
+}
+
 export interface DashboardItemDto {
     id: string;
     order: number;
@@ -293,6 +302,8 @@ export interface DashboardItemDto {
     /** Line chart widgets only: whether the Y axis starts at zero or is fitted to the
         data's own range. */
     yAxisFromZero: boolean;
+    /** Goal widgets only: the placement's conditional targets, in order. */
+    goalConditionalTargets: GoalConditionalTargetDto[];
     sources: DashboardItemSourceDto[];
 }
 
@@ -322,6 +333,8 @@ export interface CreateAndPlaceWidgetDto {
     resultType: string;
     code: string;
     matchedValuesOnly?: boolean;
+    /** Goal widgets only, and required for them: a number or an hh:mm:ss duration. */
+    goalTarget?: string;
     displayMode?: DashboardItemDisplayMode;
     mobileDisplayMode?: DashboardItemDisplayMode;
     /** Line charts only; defaults to true (0-anchored) server-side when omitted. */
@@ -388,6 +401,8 @@ export interface UpdateDashboardItemDto {
     mobileDisplayMode: DashboardItemDisplayMode;
     /** Line charts only: whether the Y axis starts at zero or is fitted to the data range. */
     yAxisFromZero: boolean;
+    /** Goal widgets only: the whole conditional-target list. An empty list clears them. */
+    goalConditionalTargets: GoalConditionalTargetDto[];
     sources: UpdateDashboardItemSourceDto[];
 }
 

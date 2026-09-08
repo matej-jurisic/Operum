@@ -35,6 +35,11 @@ namespace Operum.Model.DTOs.Dashboard.Requests
         // data's own range. Ignored for every other chart type.
         public bool YAxisFromZero { get; set; } = true;
 
+        // Goal widgets only: the placement's conditional targets, in order. The payload is
+        // the whole list, so an empty list clears them. Each Conditions key must be a filter
+        // clause this placement currently follows; DashboardService settles that.
+        public List<GoalConditionalTargetDto> GoalConditionalTargets { get; set; } = [];
+
         // Every source of the item, named once each: the payload is the whole widget, so a
         // label or a view left out means "cleared" rather than "unchanged", the same way an
         // entry's payload is the whole entry.

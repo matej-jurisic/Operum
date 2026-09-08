@@ -50,6 +50,7 @@ Charts are built in the Widget Library and calculated at query time. Each chart 
 | Type | Variants | Description |
 |---|---|---|
 | Single Value | 12 | One headline metric: count, sum, min, max, average, standard deviation, unique count, most/least common, or yes/no counts and percentage |
+| Goal | 9 | A single value calculation shown as progress toward a target you set, with a progress bar and percentage. The target can switch based on the values of the board filters the widget follows |
 | Line Chart | 7 | Raw values, sum by category, cumulative running total, or daily/weekly/monthly/yearly totals |
 | Bar Chart | 7 | Count, sum, or average per category, or daily/weekly/monthly/yearly totals |
 | Scatter Chart | 2 | Numeric X/Y point cloud for spotting correlations: one tracker's two fields, or two trackers paired on a shared match field |

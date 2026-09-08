@@ -156,7 +156,7 @@ const FEATURES = [
         color: "orange",
         title: "Analytics",
         description:
-            "29 chart variants across 6 chart types. Combine trackers on one axis or scope a chart to a view.",
+            "38 chart variants across 7 chart types, including goals that track progress toward a target. Combine trackers on one axis or scope a chart to a view.",
     },
     {
         icon: <TbPlug size={22} />,
@@ -862,8 +862,8 @@ const Home = observer(() => {
                             <Stack gap={48}>
                                 <SectionHeader
                                     eyebrow="Analytics"
-                                    title="29 ways to see your data"
-                                    subtitle="Six chart types, 29 variants. Combine trackers on one axis, or scope a chart to a saved view."
+                                    title="38 ways to see your data"
+                                    subtitle="Seven chart types, 38 variants. Combine trackers on one axis, or scope a chart to a saved view."
                                     primaryColor={theme.primaryColor}
                                 />
                                 <Grid>

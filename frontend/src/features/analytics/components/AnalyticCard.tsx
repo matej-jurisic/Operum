@@ -6,6 +6,7 @@ import {
     CalendarAnalyticDto,
     ComposedChartAnalyticDto,
     DonutChartAnaylticDto,
+    GoalAnalyticDto,
     LineChartAnalyticDto,
     ScatterChartAnalyticDto,
     SingleValueAnalyticDto,
@@ -14,11 +15,13 @@ import { BarChartCard } from "./BarChartCard";
 import { CalendarCard } from "./CalendarCard";
 import { ComposedChartCard } from "./ComposedChartCard";
 import { DonutChartCard } from "./DonutChartCard";
+import { GoalCard } from "./GoalCard";
 import { LineChartCard } from "./LineChartCard";
 import { ScatterChartCard } from "./ScatterChartCard";
 import { SingleValueCard } from "./SingleValueCard";
 
 export const SingleValueCardMemo = React.memo(SingleValueCard);
+export const GoalCardMemo = React.memo(GoalCard);
 export const LineChartCardMemo = React.memo(LineChartCard);
 export const ScatterChartCardMemo = React.memo(ScatterChartCard);
 export const CalendarChartCardMemo = React.memo(CalendarCard);
@@ -62,6 +65,17 @@ export function AnalyticCard({
                     onRemove={onRemove}
                     onEdit={onEdit}
                     onEntryClick={onEntryClick}
+                />
+            );
+        case AnalyticResultTypeEnum.Goal:
+            return (
+                <GoalCardMemo
+                    analytic={analytic as GoalAnalyticDto}
+                    color={color}
+                    isConfiguring={isConfiguring}
+                    fillHeight={fillHeight}
+                    onRemove={onRemove}
+                    onEdit={onEdit}
                 />
             );
         case AnalyticResultTypeEnum.LineChart:

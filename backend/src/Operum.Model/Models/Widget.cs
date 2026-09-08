@@ -20,6 +20,11 @@ namespace Operum.Model.Models
         // a point for. Ignored by a single-source widget.
         public bool MatchedValuesOnly { get; set; }
 
+        // Goal widgets only (ResultType == "Goal"): the target the calculated value is shown
+        // as progress toward, stored as a string in the value field's own format (an
+        // invariant number, or hh:mm:ss for a duration). Null for every other result type.
+        public string? GoalTarget { get; set; }
+
         public string OwnerId { get; set; } = string.Empty;
         [ForeignKey(nameof(OwnerId))]
         public virtual User Owner { get; set; } = null!;

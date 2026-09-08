@@ -47,6 +47,10 @@ namespace Operum.Model.DTOs.Dashboard.Requests
         // so the series line up over the same range. A single-source item ignores it.
         public bool MatchedValuesOnly { get; set; }
 
+        // Goal widgets only (ResultType == "Goal"): required, a number or hh:mm:ss duration
+        // matching the value field's type.
+        public string? GoalTarget { get; set; }
+
         // How the widget draws on each of the board's two grids — inline, as a button that
         // opens the chart in a modal, or dropped from that grid entirely.
         public DashboardItemDisplayMode DisplayMode { get; set; }

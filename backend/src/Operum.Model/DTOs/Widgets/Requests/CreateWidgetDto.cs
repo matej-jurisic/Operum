@@ -38,6 +38,10 @@ namespace Operum.Model.DTOs.Widgets.Requests
         // so the series line up over the same range. A single-source widget ignores it.
         public bool MatchedValuesOnly { get; set; }
 
+        // Goal widgets only (ResultType == "Goal"): required, and a number or hh:mm:ss
+        // duration matching the value field's type. WidgetsService settles the details.
+        public string? GoalTarget { get; set; }
+
         [Required, MinLength(1)]
         public List<CreateWidgetSourceRequestDto> Sources { get; set; } = [];
     }

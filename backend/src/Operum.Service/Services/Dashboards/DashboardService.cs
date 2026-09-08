@@ -259,6 +259,16 @@ namespace Operum.Service.Services.Dashboards
                 // No shared definition to render -- an orphaned or not-yet-migrated row.
                 if (item.Widget == null) continue;
 
+                // Goal widgets: the target is the Widget's default unless a conditional row
+                // matches the board's currently-set values for the filters this placement
+                // follows. Computed once here since a goal is always single-source.
+                var goalTarget = item.Widget.ResultType != AnalyticTypes.Goal
+                    ? item.Widget.GoalTarget
+                    : ResolveGoalTarget(
+                        item.Widget.GoalTarget,
+                        ParseGoalConditionalTargets(item.GoalConditionalTargets),
+                        ConnectedFilterValues(item.Id, filterConfigsByItemId.Values));
+
                 var resolvedSources = new List<ResolvedSource>();
 
                 foreach (var source in item.Sources.OrderBy(s => s.Order))
@@ -316,7 +326,9 @@ namespace Operum.Service.Services.Dashboards
                         {
                             Id = source.Id,
                             Code = isPaired ? AnalyticCodes.LineChart : item.Widget.Code,
-                            ResultType = isPaired ? AnalyticTypes.LineChart : item.Widget.ResultType
+                            ResultType = isPaired ? AnalyticTypes.LineChart : item.Widget.ResultType,
+                            // Goal widgets only; ignored by every other builder.
+                            GoalTarget = goalTarget
                         },
                         Entries = entries,
                         FieldMap = isPaired
@@ -457,6 +469,7 @@ namespace Operum.Service.Services.Dashboards
                 ResultType = dto.ResultType,
                 Code = dto.Code,
                 MatchedValuesOnly = dto.MatchedValuesOnly,
+                GoalTarget = dto.GoalTarget,
                 Sources = dto.Sources.Select(s => new CreateWidgetSourceRequestDto
                 {
                     TrackerId = s.TrackerId,
@@ -1309,9 +1322,48 @@ namespace Operum.Service.Services.Dashboards
                 source.ViewId = string.IsNullOrEmpty(sourceDto.ViewId) ? null : sourceDto.ViewId;
             }
 
+            // Conditional targets are a goal-only concept. For a goal, each row has to name
+            // at least one condition, every condition has to be a filter clause this
+            // placement currently follows, and the target has to read as the same kind of
+            // magnitude the goal's calculation produces.
+            string? conditionalTargetsJson = null;
+            if (item.Widget?.ResultType == AnalyticTypes.Goal && dto.GoalConditionalTargets.Count > 0)
+            {
+                var connectedQueryIds = dashboard.Items
+                    .Where(i => i.Type == DashboardWidgetTypes.Filter)
+                    .Select(i => TryParseFilterConfig(i.Config))
+                    .Where(c => c != null)
+                    .SelectMany(c => c!.Links)
+                    .Where(l => l.ItemId == item.Id)
+                    .SelectMany(l => l.FieldByQuery.Keys)
+                    .ToHashSet();
+
+                var valueFieldType = item.Sources
+                    .SelectMany(s => s.WidgetSource?.Fields ?? [])
+                    .FirstOrDefault(f => f.Purpose == AnalyticPurposes.Value)?.Field?.Type;
+
+                foreach (var row in dto.GoalConditionalTargets)
+                {
+                    if (row.Conditions.Count == 0)
+                        return Result.Failure(ResultStatusCodes.BadRequest, Messages.Required("a condition for every conditional target"));
+
+                    if (!row.Conditions.Keys.All(connectedQueryIds.Contains))
+                        return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("condition for a filter this widget doesn't follow"));
+
+                    var target = row.Target?.Trim() ?? string.Empty;
+                    if (!GoalTargets.IsParseable(target) || !GoalTargets.MatchesFieldType(item.Widget.Code, valueFieldType, target))
+                        return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("conditional target for this field's type"));
+
+                    row.Target = target;
+                }
+
+                conditionalTargetsJson = JsonSerializer.Serialize(dto.GoalConditionalTargets, ConfigJsonOptions);
+            }
+
             item.DisplayMode = dto.DisplayMode;
             item.MobileDisplayMode = dto.MobileDisplayMode;
             item.YAxisFromZero = dto.YAxisFromZero;
+            item.GoalConditionalTargets = conditionalTargetsJson;
 
             await db.SaveChangesAsync();
 
@@ -1675,6 +1727,7 @@ namespace Operum.Service.Services.Dashboards
             Code = item.Widget?.Code ?? string.Empty,
             MatchedValuesOnly = item.Widget?.MatchedValuesOnly ?? false,
             YAxisFromZero = item.YAxisFromZero,
+            GoalConditionalTargets = ParseGoalConditionalTargets(item.GoalConditionalTargets),
             Sources = item.Sources.OrderBy(s => s.Order).Select(s => MapSourceToDto(item, s)).ToList()
         };
 
@@ -1782,6 +1835,62 @@ namespace Operum.Service.Services.Dashboards
             {
                 return null;
             }
+        }
+
+        // A goal placement's conditional targets (DashboardItem.GoalConditionalTargets).
+        // Empty for a goal that has none and for every non-goal item.
+        private static List<GoalConditionalTargetDto> ParseGoalConditionalTargets(string? json)
+        {
+            if (string.IsNullOrEmpty(json))
+                return [];
+
+            try
+            {
+                return JsonSerializer.Deserialize<List<GoalConditionalTargetDto>>(json, ConfigJsonOptions) ?? [];
+            }
+            catch (JsonException)
+            {
+                return [];
+            }
+        }
+
+        // The value each filter clause this goal placement follows is currently set to on the
+        // board, keyed by pooled query id. A clause the placement doesn't follow isn't in
+        // here at all, which is what keeps a conditional target from matching on a filter it
+        // was never connected to.
+        private static Dictionary<string, string?> ConnectedFilterValues(
+            string itemId, IEnumerable<FilterWidgetConfigDto> filterConfigs)
+        {
+            var values = new Dictionary<string, string?>();
+            foreach (var config in filterConfigs)
+                foreach (var link in config.Links.Where(l => l.ItemId == itemId))
+                    foreach (var queryId in link.FieldByQuery.Keys)
+                        values[queryId] = config.ValueByQuery.GetValueOrDefault(queryId);
+            return values;
+        }
+
+        // The goal's default target, or the first conditional row whose every condition
+        // matches a currently-connected clause's value. A row with no conditions, or one
+        // naming a clause this placement no longer follows, never matches.
+        private static string? ResolveGoalTarget(
+            string? defaultTarget,
+            List<GoalConditionalTargetDto> conditionalTargets,
+            IReadOnlyDictionary<string, string?> connectedValues)
+        {
+            foreach (var row in conditionalTargets)
+            {
+                if (row.Conditions.Count == 0)
+                    continue;
+
+                var matches = row.Conditions.All(condition =>
+                    connectedValues.TryGetValue(condition.Key, out var current) &&
+                    string.Equals(current ?? string.Empty, condition.Value ?? string.Empty, StringComparison.Ordinal));
+
+                if (matches)
+                    return row.Target;
+            }
+
+            return defaultTarget;
         }
 
         private static EntriesWidgetConfigDto? TryParseEntriesConfig(string? config)

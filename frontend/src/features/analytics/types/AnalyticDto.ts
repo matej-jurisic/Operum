@@ -15,6 +15,17 @@ export interface SingleValueAnalyticDto extends AnalyticDto {
     entryId?: string;
 }
 
+export interface GoalAnalyticDto extends AnalyticDto {
+    /** The calculated value, as a string in valueField's format. */
+    value: string;
+    /** The target, same format as value. */
+    target: string;
+    /** value / target. Can exceed 1 once the target is met; null when there's nothing to
+        show (no data, or a target that isn't a positive number). */
+    progress?: number;
+    valueField?: FieldDto;
+}
+
 export interface LineChartAnalyticDto extends AnalyticDto {
     /** Null when the configured axis field can no longer be resolved (e.g. it was deleted). */
     xField?: FieldDto;

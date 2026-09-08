@@ -1,5 +1,6 @@
 export enum AnalyticResultTypeEnum {
     SingleValue = "Single Value",
+    Goal = "Goal",
     LineChart = "Line Chart",
     ScatterChart = "Scatter Chart",
     Calendar = "Calendar",

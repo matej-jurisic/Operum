@@ -9,6 +9,12 @@
         public const string Donut = "Donut Chart";
         public const string BarChart = "Bar Chart";
 
+        // A single value calculation shown as progress toward a target. Reuses the whole
+        // Single Value pipeline (same purpose, same codes); the target lives on the Widget.
+        // Widget Library only -- never offered in Explore or as a notification condition --
+        // so it carries AnalyticDefinition.WidgetOnly.
+        public const string Goal = "Goal";
+
         // Synthetic result type for dashboard widgets that combine multiple sources into
         // one chart (see DashboardService.GetDashboardAnalytics). Never a persisted
         // Analytic.ResultType, so it's intentionally excluded from `All`/`IsValid`, which
@@ -17,7 +23,7 @@
 
         public static readonly HashSet<string> All =
         [
-            SingleValue, LineChart, ScatterChart, Calendar, Donut, BarChart
+            SingleValue, LineChart, ScatterChart, Calendar, Donut, BarChart, Goal
         ];
 
         public static bool IsValid(string op) => All.Contains(op);

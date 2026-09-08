@@ -389,10 +389,12 @@ export default function ExplorePage() {
         result?.resultType === AnalyticResultTypeEnum.SingleValue;
 
     const trackerOptions = trackers.map((t) => ({ value: t.id, label: t.name }));
-    const resultTypeOptions = (config?.resultTypes ?? []).map((rt) => ({
-        value: rt.name,
-        label: rt.name,
-    }));
+    const resultTypeOptions = (config?.resultTypes ?? [])
+        .filter((rt) => !rt.widgetOnly)
+        .map((rt) => ({
+            value: rt.name,
+            label: rt.name,
+        }));
     const codeOptions = (
         resultType ? resultTypesByName[resultType]?.codes ?? [] : []
     ).map((c) => ({ value: c.code, label: c.name }));

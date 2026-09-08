@@ -3,12 +3,14 @@ import {
     Button,
     Checkbox,
     Group,
+    NumberInput,
     Paper,
     Select,
     Stack,
     Text,
     TextInput,
 } from "@mantine/core";
+import { TimePicker } from "@mantine/dates";
 import { useEffect, useMemo, useState } from "react";
 import { MdAdd, MdDelete } from "react-icons/md";
 import { analyticsController } from "../../analytics/api/analyticsController";
@@ -111,6 +113,8 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
     const [rows, setRows] = useState<TrackerRow[]>([makeEmptyRow()]);
     const [matchedValuesOnly, setMatchedValuesOnly] = useState(false);
     const [yAxisFromZero, setYAxisFromZero] = useState(true);
+    // Goal widgets only: the target the value is shown as progress toward.
+    const [goalTarget, setGoalTarget] = useState("");
     const [displayMode, setDisplayMode] = useState(DashboardItemDisplayMode.Full);
     const [mobileDisplayMode, setMobileDisplayMode] = useState(
         DashboardItemDisplayMode.Full,
@@ -146,6 +150,33 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
         isPairedCode ||
         (!!resultType && COMBINABLE_TYPES.includes(resultType));
     const isLineChart = resultType === AnalyticResultTypeEnum.LineChart;
+    const isGoal = resultType === AnalyticResultTypeEnum.Goal;
+
+    // Goal calculations that always come out as a plain number, whatever the field type.
+    const GOAL_COUNTING_CODES = [
+        "Count",
+        "Count Distinct",
+        "True Count",
+        "False Count",
+        "True Percentage",
+    ];
+    const goalValueField = isGoal
+        ? rows[0]?.fields.find((f) => f.id === rows[0]?.fieldMappings["Value"])
+        : undefined;
+    const goalTargetIsDuration =
+        !!goalValueField &&
+        goalValueField.type === "timespan" &&
+        !GOAL_COUNTING_CODES.includes(code ?? "");
+    const goalTargetValid = goalTargetIsDuration
+        ? /^\d+:[0-5]\d:[0-5]\d$/.test(goalTarget.trim())
+        : goalTarget.trim() !== "" &&
+          Number.isFinite(Number(goalTarget.trim()));
+
+    // The target's format follows the calculation and the value field, so a change to
+    // either invalidates whatever was typed.
+    useEffect(() => {
+        setGoalTarget("");
+    }, [resultType, code, goalValueField?.type]);
 
     const updateRow = (index: number, patch: Partial<TrackerRow>) => {
         setRows((prev) =>
@@ -268,6 +299,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                 code: code!,
                 matchedValuesOnly:
                     rows.length > 1 && !!xAxisPurpose && matchedValuesOnly,
+                goalTarget: isGoal ? goalTarget.trim() : undefined,
                 yAxisFromZero: isLineChart ? yAxisFromZero : undefined,
                 displayMode,
                 mobileDisplayMode,
@@ -299,7 +331,8 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
         !!selectedCode &&
         rows.every(isRowComplete) &&
         rows.every((row) => followLinksComplete(row.filterLinks, filterCandidates, row.fields)) &&
-        (!isPairedCode || rows.length === 2);
+        (!isPairedCode || rows.length === 2) &&
+        (!isGoal || goalTargetValid);
 
     return (
         <Stack gap="md">
@@ -411,6 +444,27 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                     </Paper>
                 );
             })}
+
+            {isGoal &&
+                goalValueField &&
+                (goalTargetIsDuration ? (
+                    <TimePicker
+                        label="Target (hh:mm:ss)"
+                        withSeconds
+                        format="24h"
+                        value={goalTarget}
+                        onChange={setGoalTarget}
+                    />
+                ) : (
+                    <NumberInput
+                        label="Target"
+                        placeholder="Goal value"
+                        value={goalTarget === "" ? "" : Number(goalTarget)}
+                        onChange={(value) =>
+                            setGoalTarget(value === "" ? "" : String(value))
+                        }
+                    />
+                ))}
 
             {rows.length > 1 && xAxisPurpose && (
                 <Checkbox

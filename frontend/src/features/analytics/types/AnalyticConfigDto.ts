@@ -11,6 +11,9 @@ export interface CodeDto {
 
 export interface ResultTypeDto {
     name: string;
+    /** True for result types only offered when building a saved widget (a Goal), not in
+        Explore or a notification condition. */
+    widgetOnly: boolean;
     codes: CodeDto[];
 }
 

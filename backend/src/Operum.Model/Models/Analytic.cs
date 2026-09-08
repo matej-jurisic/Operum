@@ -14,5 +14,9 @@ namespace Operum.Model.Models
         public string Description { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
         public string ResultType { get; set; } = string.Empty;
+
+        // Goal widgets only: the target GoalAnalyticBuilder shows the calculated value as
+        // progress toward, in the value field's own string format. Null for everything else.
+        public string? GoalTarget { get; set; }
     }
 }

@@ -14,6 +14,7 @@ namespace Operum.Service.Domain.Analytics
             var builders = new IAnalyticResultBuilder[]
             {
                 new SingleValueAnalyticBuilder(),
+                new GoalAnalyticBuilder(),
                 new LineChartAnalyticBuilder(),
                 new ScatterChartAnalyticBuilder(),
                 new CalendarAnalyticBuilder(),

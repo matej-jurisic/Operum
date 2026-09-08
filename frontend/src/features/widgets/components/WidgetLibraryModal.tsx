@@ -656,7 +656,10 @@ function RenameChartStep({
 }) {
     const [name, setName] = useState(widget.name);
     const [description, setDescription] = useState(widget.description ?? "");
+    const [goalTarget, setGoalTarget] = useState(widget.goalTarget ?? "");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const isGoal = widget.resultType === "Goal";
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
@@ -664,6 +667,7 @@ function RenameChartStep({
             await onSave({
                 name: name.trim() || undefined,
                 description: description.trim() || undefined,
+                goalTarget: isGoal ? goalTarget.trim() : undefined,
             });
         } finally {
             setIsSubmitting(false);
@@ -687,6 +691,15 @@ function RenameChartStep({
                 value={description}
                 onChange={(event) => setDescription(event.currentTarget.value)}
             />
+            {isGoal && (
+                <TextInput
+                    label="Target"
+                    description="A number, or hh:mm:ss for a duration."
+                    maxLength={20}
+                    value={goalTarget}
+                    onChange={(event) => setGoalTarget(event.currentTarget.value)}
+                />
+            )}
             <Group justify="flex-end" mt="xs">
                 <Button variant="default" onClick={onCancel}>
                     Cancel

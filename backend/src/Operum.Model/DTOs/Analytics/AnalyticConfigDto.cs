@@ -8,6 +8,9 @@
     public class AnalyticConfigType
     {
         public string Name { get; set; } = default!;
+        // True for result types only offered when building a saved widget (a Goal), never in
+        // Explore or a notification condition.
+        public bool WidgetOnly { get; set; }
         public List<AnalyticConfigCode> Codes { get; set; } = [];
     }
 

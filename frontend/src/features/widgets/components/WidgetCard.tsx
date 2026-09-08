@@ -10,6 +10,7 @@ import {
     TbChartHistogram,
     TbChartLine,
     TbNumbers,
+    TbTargetArrow,
 } from "react-icons/tb";
 import { WidgetDto } from "../types/WidgetDto";
 
@@ -28,6 +29,8 @@ function resultTypeIcon(resultType: string): IconType {
     switch (resultType) {
         case "Single Value":
             return TbNumbers;
+        case "Goal":
+            return TbTargetArrow;
         case "Line Chart":
             return TbChartLine;
         case "Scatter Chart":
@@ -82,7 +85,11 @@ export function WidgetCard({ widget, color, isMobile, onAdd, onEdit, onDelete }:
                     {widget.name}
                 </Text>
                 <Text size="xs" c="dimmed" truncate>
-                    {[widget.resultType, ...trackerNames].join("  ·  ")}
+                    {[
+                        widget.resultType,
+                        ...(widget.goalTarget ? [`target ${widget.goalTarget}`] : []),
+                        ...trackerNames,
+                    ].join("  ·  ")}
                 </Text>
             </Stack>
 
