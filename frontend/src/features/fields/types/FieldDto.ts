@@ -7,4 +7,6 @@ export interface FieldDto {
     selectOptions?: string[];
     isCalculated: boolean;
     formula?: string;
+    referencedTrackerId?: string;
+    referencedDisplayFieldId?: string;
 }

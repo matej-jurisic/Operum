@@ -19,6 +19,8 @@ namespace Operum.Model.Extensions
                     DataTypes.DateTime => fieldValue.DateTimeValue,
                     DataTypes.TimeSpan => fieldValue.TimeSpanValue,
                     DataTypes.Bool => fieldValue.BooleanValue,
+                    // The cached link label. The actual link is ReferencedEntryId.
+                    DataTypes.Reference => fieldValue.StringValue,
                     _ => null,
                 };
             }
@@ -68,6 +70,20 @@ namespace Operum.Model.Extensions
                             fieldValue.BooleanValue = null;
                         }
                         break;
+                    case DataTypes.Reference:
+                        // value is the target entry id. The display label in StringValue is
+                        // filled in afterwards by ReferenceLabelService; clearing the link
+                        // clears the cached label now.
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            fieldValue.ReferencedEntryId = value;
+                        }
+                        else
+                        {
+                            fieldValue.ReferencedEntryId = null;
+                            fieldValue.StringValue = null;
+                        }
+                        break;
                     default:
                         return false;
                 }
@@ -92,17 +108,25 @@ namespace Operum.Model.Extensions
                 DataTypes.DateTime => fieldValue.DateTimeValue.HasValue ? DataFormatters.DateTimeToDateTimeString(fieldValue.DateTimeValue.Value) : null,
                 DataTypes.TimeSpan => fieldValue.TimeSpanValue.HasValue ? DataFormatters.TimeSpanToString(fieldValue.TimeSpanValue.Value) : null,
                 DataTypes.Bool => fieldValue.BooleanValue?.ToString(),
+                DataTypes.Reference => fieldValue.StringValue,
                 _ => null
             };
         }
 
         private static void ClearOtherFieldValues(FieldValue fieldValue, string currentType)
         {
-            if (currentType != DataTypes.String) fieldValue.StringValue = null;
+            // Reference keeps its label cached in StringValue, so don't wipe that here.
+            if (currentType != DataTypes.String && currentType != DataTypes.Reference) fieldValue.StringValue = null;
             if (currentType != DataTypes.Number) fieldValue.NumberValue = null;
             if (currentType != DataTypes.Date && currentType != DataTypes.DateTime) fieldValue.DateTimeValue = null;
             if (currentType != DataTypes.TimeSpan) fieldValue.TimeSpanValue = null;
             if (currentType != DataTypes.Bool) fieldValue.BooleanValue = null;
+            if (currentType != DataTypes.Reference)
+            {
+                fieldValue.ReferencedEntryId = null;
+                // A reference label lives in StringValue; a non-reference type owns StringValue
+                // itself and the block above already cleared it where appropriate.
+            }
         }
     }
 }

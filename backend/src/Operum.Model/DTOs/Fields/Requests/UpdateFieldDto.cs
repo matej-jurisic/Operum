@@ -14,6 +14,8 @@ namespace Operum.Model.DTOs.Fields.Requests
         public List<string>? SelectOptions { get; set; }
         public bool IsCalculated { get; set; } = false;
         public string? Formula { get; set; }
+        public string? ReferencedTrackerId { get; set; }
+        public string? ReferencedDisplayFieldId { get; set; }
     }
 
     public class UpdateFieldDtoValidator : AbstractValidator<UpdateFieldDto>
@@ -58,6 +60,18 @@ namespace Operum.Model.DTOs.Fields.Requests
             RuleForEach(x => x.SelectOptions)
                 .Must(opt => double.TryParse(opt, NumberStyles.Float, CultureInfo.InvariantCulture, out _)).WithMessage("Select options for number fields must be valid numbers.")
                 .When(x => x.SelectOptions != null && x.Type == DataTypes.Number);
+
+            RuleFor(x => x.ReferencedTrackerId)
+                .NotEmpty().WithMessage("A reference field needs a tracker to link to.")
+                .When(x => x.Type == DataTypes.Reference);
+
+            RuleFor(x => x.IsCalculated)
+                .Equal(false).WithMessage("Reference fields cannot be calculated.")
+                .When(x => x.Type == DataTypes.Reference);
+
+            RuleFor(x => x.SelectOptions)
+                .Empty().WithMessage("Reference fields cannot have suggested options.")
+                .When(x => x.Type == DataTypes.Reference);
         }
     }
 }

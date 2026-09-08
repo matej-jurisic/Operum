@@ -24,6 +24,20 @@ export const entriesController = {
     ): Promise<ApiResponse<EntryDto>> => {
         return await api.get(`/trackers/${trackerId}/entries/${entryId}`);
     },
+    getEntryOptions: async (
+        trackerId: string,
+        displayFieldId?: string | null,
+        search?: string,
+        limit: number = 20
+    ): Promise<ApiResponse<{ id: string; label: string }[]>> => {
+        const params = new URLSearchParams();
+        if (displayFieldId) params.append("displayFieldId", displayFieldId);
+        if (search) params.append("search", search);
+        params.append("limit", limit.toString());
+        return await api.get(
+            `/trackers/${trackerId}/entries/options?${params.toString()}`
+        );
+    },
     getEntries: async (
         trackerId: string,
         viewId?: string | null,

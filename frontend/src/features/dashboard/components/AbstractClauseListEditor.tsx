@@ -50,6 +50,10 @@ const syntheticField = (path: string, index: number, type: string): FieldDto => 
     isCalculated: false,
 });
 
+// Reference clauses need a tracker to pick from, which a data-type-only clause has no way
+// to name, so they are not offered in field-agnostic (dashboard) filter editing.
+const clauseFieldTypes = fieldTypes.filter((t) => t.value !== "reference");
+
 const dataTypeLabel = (value: string) =>
     fieldTypes.find((t) => t.value === value)?.label ?? value;
 
@@ -214,7 +218,7 @@ export default function AbstractClauseListEditor({
                                         flex={1}
                                         label="Type"
                                         allowDeselect={false}
-                                        data={fieldTypes}
+                                        data={clauseFieldTypes}
                                         value={row.dataType || null}
                                         onChange={(value) =>
                                             form.setFieldValue(`${path}.${index}`, {
@@ -300,7 +304,7 @@ export default function AbstractClauseListEditor({
                                         flex={1}
                                         label="Type"
                                         allowDeselect={false}
-                                        data={fieldTypes}
+                                        data={clauseFieldTypes}
                                         value={row.dataType || null}
                                         onChange={(value) =>
                                             form.setFieldValue(`${path}.${index}`, {

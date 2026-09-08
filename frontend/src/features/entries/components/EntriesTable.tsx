@@ -20,6 +20,7 @@ const gridColumMinWidth = {
     datetime: "160px",
     timespan: "80px",
     bool: "80px",
+    reference: "120px",
 };
 
 interface EntriesTableProps {

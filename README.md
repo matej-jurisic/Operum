@@ -12,7 +12,9 @@ Flexible data tracking. Define your schema, log entries, build views, assemble d
 
 A tracker is a container for one kind of data: a reading list, workout log, bug database, whatever. You define its structure with fields, then start logging entries. Each tracker has a name, color, and icon. Create one field by field, step through the guided wizard, or clone a published template.
 
-Supported field types: `string`, `number`, `bool`, `date`, `datetime`, `timespan`. Each field has a name, an optional description, can be marked required, and `string` fields can carry a fixed list of select options. Which fields show, and in what order, is decided per view.
+Supported field types: `string`, `number`, `bool`, `date`, `datetime`, `timespan`, `reference`. Each field has a name, an optional description, can be marked required, and `string` fields can carry a fixed list of select options. Which fields show, and in what order, is decided per view.
+
+**Reference fields** — a `reference` field links each entry to one entry in another tracker, picked from a search box. Configure which tracker it points at and which of that tracker's fields to show as the label. The label is kept in sync when the linked entry changes, and the cell clears if the linked entry is deleted. Filtering a view by a reference field matches on that label.
 
 **Calculated fields** — any `number`, `bool`, or `timespan` field can be marked as calculated. Write a formula using `{FieldName}` syntax and Operum evaluates it automatically on every create or update. TimeSpan fields support unit access via `{Field.hours}`, `{Field.minutes}`, and `{Field.seconds}`. Calculated fields are hidden from the entry form. Select a group of entries and force-recalculate them on demand when a formula changes after data already exists.
 

@@ -10,6 +10,8 @@ interface EntryFormDialogProps {
     entryId?: string;
     title?: string;
     initialValues?: Record<string, unknown>;
+    /** Reference fields: field name -> label of the preselected entry, keyed by field name. */
+    referenceLabels?: Record<string, string>;
     onClose: () => void;
 }
 
@@ -62,7 +64,7 @@ export default function EntryFormDialog(props: EntryFormDialogProps) {
         const fieldValues: Record<string, string> = {};
 
         fields.filter((field) => !field.isCalculated).forEach((field) => {
-            let value = values[field.name];
+            const value = values[field.name];
             fieldValues[field.name] = GetStringValue(field.type, value);
         });
 
@@ -95,6 +97,7 @@ export default function EntryFormDialog(props: EntryFormDialogProps) {
                                     key={field.id}
                                     field={field}
                                     form={form}
+                                    referenceLabel={props.referenceLabels?.[field.name]}
                                 />
                             ))}
 

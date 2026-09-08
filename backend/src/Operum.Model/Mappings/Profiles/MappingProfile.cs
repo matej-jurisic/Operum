@@ -68,6 +68,7 @@ namespace Operum.Service.Mappings.Profiles
                 d.FieldName = s.Field.Name;
                 d.FieldType = s.Field.Type;
                 d.Value = s.GetFieldValue();
+                d.ReferencedEntryId = s.ReferencedEntryId;
             });
 
             mapper.Register<Entry, EntryDto>((s, d) =>

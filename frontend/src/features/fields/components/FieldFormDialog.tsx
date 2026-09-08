@@ -11,8 +11,10 @@ import {
     TextInput,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
+import { useEffect, useMemo, useState } from "react";
 import { calculatedFieldTypes, fieldTypes } from "../../../shared/constants/DataTypesForSelect";
 import { useTrackerOperations } from "../../../shared/hooks/useTrackerOperations";
+import { trackersController } from "../../trackers/api/trackersController";
 import { TrackerDto } from "../../trackers/types/TrackerDto";
 import { CreateFieldDto } from "../types/CreateFieldDto";
 import { FieldDto } from "../types/FieldDto";
@@ -27,6 +29,14 @@ interface FieldFormDialogProps {
 
 export function FieldFormDialog(props: FieldFormDialogProps) {
     const { createField, updateField } = useTrackerOperations();
+    const [trackers, setTrackers] = useState<TrackerDto[]>([]);
+
+    useEffect(() => {
+        trackersController
+            .getTrackerList("Accessible")
+            .then((res) => setTrackers(res.data ?? []))
+            .catch(() => setTrackers([]));
+    }, []);
 
     const form = useForm<CreateFieldDto & UpdateFieldDto>({
         initialValues: props.initialValues
@@ -38,6 +48,9 @@ export function FieldFormDialog(props: FieldFormDialogProps) {
                   selectOptions: props.initialValues.selectOptions || [],
                   isCalculated: props.initialValues.isCalculated,
                   formula: props.initialValues.formula || "",
+                  referencedTrackerId: props.initialValues.referencedTrackerId || "",
+                  referencedDisplayFieldId:
+                      props.initialValues.referencedDisplayFieldId || "",
               }
             : {
                   name: "",
@@ -47,6 +60,8 @@ export function FieldFormDialog(props: FieldFormDialogProps) {
                   selectOptions: [],
                   isCalculated: false,
                   formula: "",
+                  referencedTrackerId: "",
+                  referencedDisplayFieldId: "",
               },
 
         validate: {
@@ -71,15 +86,33 @@ export function FieldFormDialog(props: FieldFormDialogProps) {
                 form.type === "number" && values?.some((v) => isNaN(Number(v)))
                     ? "All suggested options for number fields must be valid numbers"
                     : null,
+            referencedTrackerId: (value, values) =>
+                values.type === "reference" && !value
+                    ? "Pick a tracker to link to"
+                    : null,
         },
     });
+
+    const isReference = form.values.type === "reference";
+
+    const referencedTracker = useMemo(
+        () => trackers.find((t) => t.id === form.values.referencedTrackerId),
+        [trackers, form.values.referencedTrackerId],
+    );
+
+    const displayFieldOptions = useMemo(
+        () =>
+            (referencedTracker?.fields ?? [])
+                .filter((f) => f.type !== "reference")
+                .map((f) => ({ value: f.id, label: f.name })),
+        [referencedTracker],
+    );
 
     const handleModeChange = (value: string) => {
         const isCalc = value === "calculated";
         form.setFieldValue("isCalculated", isCalc);
         if (isCalc) {
             form.setFieldValue("required", false);
-            // Switch to a calculated-compatible type if current type isn't compatible
             const calcTypes = calculatedFieldTypes.map((t) => t.value);
             if (!calcTypes.includes(form.values.type)) {
                 form.setFieldValue("type", "number");
@@ -87,10 +120,30 @@ export function FieldFormDialog(props: FieldFormDialogProps) {
         }
     };
 
+    const handleTypeChange = (value: string | null) => {
+        const next = value ?? "string";
+        form.setFieldValue("type", next);
+        if (next === "reference") {
+            form.setFieldValue("isCalculated", false);
+            form.setFieldValue("selectOptions", []);
+        } else {
+            form.setFieldValue("referencedTrackerId", "");
+            form.setFieldValue("referencedDisplayFieldId", "");
+        }
+    };
+
     const handleSubmit = async (values: CreateFieldDto & UpdateFieldDto) => {
         const payload = {
             ...values,
             formula: values.isCalculated ? values.formula : undefined,
+            referencedTrackerId:
+                values.type === "reference"
+                    ? values.referencedTrackerId
+                    : undefined,
+            referencedDisplayFieldId:
+                values.type === "reference"
+                    ? values.referencedDisplayFieldId || undefined
+                    : undefined,
         };
         if (props.fieldId) {
             updateField(props.fieldId, payload);
@@ -136,7 +189,42 @@ export function FieldFormDialog(props: FieldFormDialogProps) {
                         data={isCalculated ? calculatedFieldTypes : fieldTypes}
                         required
                         {...form.getInputProps("type")}
+                        onChange={handleTypeChange}
                     />
+
+                    {isReference && (
+                        <>
+                            <Select
+                                label="Referenced tracker"
+                                placeholder="Choose a tracker"
+                                searchable
+                                data={trackers.map((t) => ({
+                                    value: t.id,
+                                    label: t.name,
+                                }))}
+                                {...form.getInputProps("referencedTrackerId")}
+                                onChange={(value) => {
+                                    form.setFieldValue(
+                                        "referencedTrackerId",
+                                        value ?? "",
+                                    );
+                                    form.setFieldValue(
+                                        "referencedDisplayFieldId",
+                                        "",
+                                    );
+                                }}
+                            />
+                            <Select
+                                label="Display field"
+                                description="Which field of that tracker to show as the link label."
+                                placeholder="Entry date"
+                                clearable
+                                disabled={!referencedTracker}
+                                data={displayFieldOptions}
+                                {...form.getInputProps("referencedDisplayFieldId")}
+                            />
+                        </>
+                    )}
 
                     {isCalculated && (
                         <Stack gap="xs">

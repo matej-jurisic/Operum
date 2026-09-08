@@ -13,6 +13,7 @@ export const fieldTypes = [
     { value: "date", label: "Date" },
     { value: "timespan", label: "Timespan" },
     { value: "datetime", label: "Datetime" },
+    { value: "reference", label: "Reference" },
 ];
 
 export const operatorTypes = [
@@ -54,7 +55,7 @@ export const operatorsForFieldType = (type: string | undefined) => {
     const allowed =
         type === FieldTypes.String
             ? TEXT_OPERATORS
-            : type === FieldTypes.Bool
+            : type === FieldTypes.Bool || type === FieldTypes.Reference
               ? EQUALITY_OPERATORS
               : type === undefined
                 ? null

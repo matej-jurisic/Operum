@@ -10,5 +10,7 @@
         public List<string>? SelectOptions { get; set; }
         public bool IsCalculated { get; set; } = false;
         public string? Formula { get; set; }
+        public string? ReferencedTrackerId { get; set; }
+        public string? ReferencedDisplayFieldId { get; set; }
     }
 }

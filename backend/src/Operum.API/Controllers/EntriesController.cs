@@ -31,6 +31,16 @@ namespace Operum.API.Controllers
             return GetApiResponse(await entriesService.GetEntry(trackerId, entryId));
         }
 
+        [HttpGet("options")]
+        public async Task<IActionResult> GetEntryOptions(
+            [FromRoute] string trackerId,
+            [FromQuery] string? displayFieldId,
+            [FromQuery] string? search,
+            [FromQuery] int limit = 20)
+        {
+            return GetApiResponse(await entriesService.GetEntryOptions(trackerId, displayFieldId, search, limit));
+        }
+
         [HttpPut("{entryId}")]
         public async Task<IActionResult> UpdateEntry([FromRoute] string trackerId, [FromRoute] string entryId, [FromBody] UpdateEntryDto entry)
         {

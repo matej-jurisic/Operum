@@ -12,6 +12,7 @@ namespace Operum.Service.Services.Entries
     public class EntryWriter(
         OperumContext db,
         IFormulaEvaluationService formulaEvaluationService,
+        IReferenceLabelService referenceLabelService,
         ILogger<EntryWriter> logger) : IEntryWriter
     {
         // One bad mapping would otherwise produce a message per record in the batch.
@@ -186,6 +187,17 @@ namespace Operum.Service.Services.Entries
                     // A formula that throws must not cost us the entries already written.
                     logger.LogError(ex, "Calculated fields failed for entry {EntryId} on tracker {TrackerId}", entry.Id, trackerId);
                     Report($"{entry.ExternalId}: calculated fields failed");
+                }
+
+                try
+                {
+                    await referenceLabelService.ResolveEntryReferences(entry.Id, fieldValues, fields);
+                    await referenceLabelService.RefreshReferencesToEntry(entry.Id);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Reference labels failed for entry {EntryId} on tracker {TrackerId}", entry.Id, trackerId);
+                    Report($"{entry.ExternalId}: reference labels failed");
                 }
             }
 

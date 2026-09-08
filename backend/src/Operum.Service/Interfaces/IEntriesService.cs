@@ -18,5 +18,6 @@ namespace Operum.Service.Interfaces
         public Task<Result<FileContentResult>> ExportEntriesToCsv(string trackerId, string? viewId);
         public Task<Result> RecalculateEntries(string trackerId, EntrySelectionDto selection);
         public Task<Result> BatchEntries(string trackerId, BatchEntriesDto batch);
+        public Task<Result<List<EntryOptionDto>>> GetEntryOptions(string trackerId, string? displayFieldId, string? search, int limit);
     }
 }

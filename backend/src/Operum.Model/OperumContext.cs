@@ -404,6 +404,36 @@ namespace Operum.Model
             // needs a trigram index, which is a Postgres-only migration.
             builder.Entity<FieldValue>()
                 .HasIndex(fv => new { fv.FieldId, fv.StringValue });
+
+            // A "reference" field caches its link label in StringValue (so the indexes above
+            // cover filtering/sorting), and keeps the actual link here. This composite serves
+            // "which values point at this entry" -- the fan-out the delete cleanup and the
+            // label-refresh service both run.
+            builder.Entity<FieldValue>()
+                .HasIndex(fv => new { fv.FieldId, fv.ReferencedEntryId });
+
+            // A reference field's configured target. SetNull rather than cascade: deleting the
+            // target tracker/field degrades the reference field (read-only, values keep their
+            // last label) instead of destroying the schema around it.
+            builder.Entity<Field>()
+                .HasOne(f => f.ReferencedTracker)
+                .WithMany()
+                .HasForeignKey(f => f.ReferencedTrackerId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            builder.Entity<Field>()
+                .HasOne(f => f.ReferencedDisplayField)
+                .WithMany()
+                .HasForeignKey(f => f.ReferencedDisplayFieldId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // The per-value link. SetNull is the backstop when the target entry is deleted;
+            // the delete paths in EntriesService also clear the cached label in StringValue.
+            builder.Entity<FieldValue>()
+                .HasOne(fv => fv.ReferencedEntry)
+                .WithMany()
+                .HasForeignKey(fv => fv.ReferencedEntryId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
 
         public override DbSet<User> Users { get; set; }

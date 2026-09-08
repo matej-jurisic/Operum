@@ -4,12 +4,17 @@ import { DatePickerInput, DateTimePicker, TimePicker } from "@mantine/dates";
 import { UseFormReturnType } from "@mantine/form";
 import { CSSProperties } from "react";
 import { FieldDto } from "../types/FieldDto";
+import ReferenceValueInput from "./ReferenceValueInput";
 
 interface FieldValueInputProps<T extends Record<string, any> = any> {
     field: FieldDto;
     form: UseFormReturnType<T>;
     fieldPath?: string;
     styles?: CSSProperties;
+    /** Reference fields only: "id" for entry forms, "label" for filter editors. */
+    referenceValueMode?: "id" | "label";
+    /** Reference fields only: label for the already-selected value. */
+    referenceLabel?: string;
 }
 
 export default function FieldValueInput<T extends Record<string, any> = any>({
@@ -17,6 +22,8 @@ export default function FieldValueInput<T extends Record<string, any> = any>({
     form,
     fieldPath,
     styles,
+    referenceValueMode,
+    referenceLabel,
 }: FieldValueInputProps<T>) {
     const path = fieldPath || field.name;
 
@@ -93,6 +100,18 @@ export default function FieldValueInput<T extends Record<string, any> = any>({
                     {...baseProps}
                     format="24h"
                     label={baseProps.label + " (hh:mm:ss)"}
+                />
+            );
+
+        case "reference":
+            return (
+                <ReferenceValueInput
+                    field={field}
+                    form={form}
+                    fieldPath={path}
+                    styles={styles}
+                    valueMode={referenceValueMode}
+                    referenceLabel={referenceLabel}
                 />
             );
 

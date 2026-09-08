@@ -3,4 +3,5 @@ export interface FieldValueDto {
     fieldName: string;
     fieldType: string;
     value?: unknown | null;
+    referencedEntryId?: string | null;
 }

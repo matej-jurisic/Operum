@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 
 namespace Operum.Service.Services.Fields
 {
-    public class FieldsService(ICurrentUserService currentUserService, IMapper mapper, OperumContext db, ILogger<FieldsService> logger) : IFieldsService
+    public class FieldsService(ICurrentUserService currentUserService, IMapper mapper, OperumContext db, ILogger<FieldsService> logger, IReferenceLabelService referenceLabelService) : IFieldsService
     {
         private static readonly Regex TokenPattern = new(@"\{([^}]+)\}", RegexOptions.Compiled);
 
@@ -47,7 +47,21 @@ namespace Operum.Service.Services.Fields
                 field.Required = false;
             }
 
+            if (field.Type == DataTypes.Reference)
+            {
+                var refError = await ValidateReferenceConfig(field.ReferencedTrackerId, field.ReferencedDisplayFieldId, user.Id);
+                if (refError != null)
+                    return Result.Failure(ResultStatusCodes.BadRequest, refError);
+                field.IsCalculated = false;
+            }
+
             var newField = mapper.Map<CreateFieldDto, Field>(field);
+
+            if (newField.Type != DataTypes.Reference)
+            {
+                newField.ReferencedTrackerId = null;
+                newField.ReferencedDisplayFieldId = null;
+            }
 
             newField.TrackerId = trackerId;
 
@@ -217,6 +231,19 @@ namespace Operum.Service.Services.Fields
                 field.Formula = null;
             }
 
+            if (field.Type == DataTypes.Reference)
+            {
+                var refError = await ValidateReferenceConfig(field.ReferencedTrackerId, field.ReferencedDisplayFieldId, user.Id);
+                if (refError != null)
+                    return Result.Failure(ResultStatusCodes.BadRequest, refError);
+                field.IsCalculated = false;
+            }
+
+            var wasReference = originalField.Type == DataTypes.Reference;
+            var referenceTargetChanged = field.Type == DataTypes.Reference
+                && (originalField.ReferencedTrackerId != field.ReferencedTrackerId
+                    || originalField.ReferencedDisplayFieldId != field.ReferencedDisplayFieldId);
+
             mapper.Map(field, originalField, (s, d) =>
             {
                 d.SelectOptions = s.SelectOptions != null
@@ -224,12 +251,57 @@ namespace Operum.Service.Services.Fields
                     : null;
                 d.IsCalculated = s.IsCalculated;
                 d.Formula = s.IsCalculated ? s.Formula : null;
+                if (s.Type != DataTypes.Reference)
+                {
+                    d.ReferencedTrackerId = null;
+                    d.ReferencedDisplayFieldId = null;
+                }
             });
             db.Fields.Update(originalField);
             await db.SaveChangesAsync();
 
+            if (wasReference && field.Type != DataTypes.Reference)
+            {
+                // The field is no longer a reference: drop every link and cached label.
+                await db.FieldValues
+                    .Where(fv => fv.FieldId == fieldId && (fv.ReferencedEntryId != null || fv.StringValue != null))
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(x => x.ReferencedEntryId, (string?)null)
+                        .SetProperty(x => x.StringValue, (string?)null));
+            }
+            else if (referenceTargetChanged)
+            {
+                await referenceLabelService.RefreshFieldReferences(fieldId);
+            }
+
             var updatedField = await GetField(trackerId, fieldId);
             return Result.Success(updatedField.Data);
+        }
+
+        private async Task<string?> ValidateReferenceConfig(string? referencedTrackerId, string? displayFieldId, string userId)
+        {
+            if (string.IsNullOrEmpty(referencedTrackerId))
+                return "A reference field needs a tracker to link to.";
+
+            var target = await db.Trackers
+                .Include(t => t.ApplicationUserTrackers)
+                .FirstOrDefaultAsync(t => t.Id == referencedTrackerId);
+
+            var canRead = target != null
+                && (target.OwnerId == userId || target.ApplicationUserTrackers.Any(ut => ut.ApplicationUserId == userId));
+            if (!canRead)
+                return Messages.ItemNotFound("referenced tracker");
+
+            if (!string.IsNullOrEmpty(displayFieldId))
+            {
+                var displayField = await db.Fields.FirstOrDefaultAsync(f => f.Id == displayFieldId);
+                if (displayField == null || displayField.TrackerId != referencedTrackerId)
+                    return "The display field must belong to the referenced tracker.";
+                if (displayField.Type == DataTypes.Reference)
+                    return "The display field cannot itself be a reference field.";
+            }
+
+            return null;
         }
 
         // Strip optional ".property" suffix (e.g. "Duration.hours" → "Duration")

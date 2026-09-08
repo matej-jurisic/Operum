@@ -6,4 +6,6 @@ export interface CreateFieldDto {
     selectOptions?: string[];
     isCalculated: boolean;
     formula?: string;
+    referencedTrackerId?: string;
+    referencedDisplayFieldId?: string;
 }

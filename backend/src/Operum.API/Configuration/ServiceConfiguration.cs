@@ -63,6 +63,7 @@ namespace Operum.API.Configuration
             services.AddScoped<IAnalyticsService, AnalyticsService>();
             services.AddScoped<ITrackerConstantsService, TrackerConstantsService>();
             services.AddScoped<IFormulaEvaluationService, FormulaEvaluationService>();
+            services.AddScoped<IReferenceLabelService, ReferenceLabelService>();
             services.AddScoped<IDashboardService, DashboardService>();
             services.AddScoped<IWidgetsService, WidgetsService>();
             services.AddScoped<INotificationsService, NotificationsService>();

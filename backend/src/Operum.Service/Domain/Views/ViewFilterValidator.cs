@@ -17,7 +17,7 @@ namespace Operum.Service.Domain.Views
 
                 return fieldType.ToLowerInvariant() switch
                 {
-                    DataTypes.String => true,
+                    DataTypes.String or DataTypes.Reference => true,
                     DataTypes.Number => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _),
                     DataTypes.Date or DataTypes.DateTime =>
                         DynamicDateTokens.IsValid(value) || DataFormatters.StringToDateTime(value) != null,
@@ -57,6 +57,8 @@ namespace Operum.Service.Domain.Views
                     or OperatorTypes.LessThan or OperatorTypes.LessThanOrEqual,
 
                 DataTypes.Bool => operatorType is OperatorTypes.EqualsOperator or OperatorTypes.NotEquals,
+
+                DataTypes.Reference => operatorType is OperatorTypes.EqualsOperator or OperatorTypes.NotEquals,
 
                 _ => false
             };

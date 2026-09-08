@@ -78,7 +78,7 @@ namespace Operum.Service.Domain.Views
                 {
                     orderedQuery = fieldType switch
                     {
-                        DataTypes.String => descending
+                        DataTypes.String or DataTypes.Reference => descending
                             ? query.OrderByDescending(e => e.FieldValues.FirstOrDefault(fv => fv.FieldId == fieldId)!.StringValue)
                             : query.OrderBy(e => e.FieldValues.FirstOrDefault(fv => fv.FieldId == fieldId)!.StringValue),
 
@@ -107,7 +107,7 @@ namespace Operum.Service.Domain.Views
                 {
                     orderedQuery = fieldType switch
                     {
-                        DataTypes.String => descending
+                        DataTypes.String or DataTypes.Reference => descending
                             ? orderedQuery.ThenByDescending(e => e.FieldValues.FirstOrDefault(fv => fv.FieldId == fieldId)!.StringValue)
                             : orderedQuery.ThenBy(e => e.FieldValues.FirstOrDefault(fv => fv.FieldId == fieldId)!.StringValue),
 
@@ -152,7 +152,8 @@ namespace Operum.Service.Domain.Views
                 query = fieldType switch
                 {
                     DataTypes.Number => ApplyNumberFilter(query, fieldId, operatorType, value),
-                    DataTypes.String => ApplyStringFilter(query, fieldId, operatorType, value),
+                    // Reference matches on the cached link label held in StringValue.
+                    DataTypes.String or DataTypes.Reference => ApplyStringFilter(query, fieldId, operatorType, value),
                     DataTypes.Date or DataTypes.DateTime => ApplyDateTimeFilter(query, fieldId, operatorType, value, tz),
                     DataTypes.TimeSpan => ApplyTimeSpanFilter(query, fieldId, operatorType, value),
                     DataTypes.Bool => ApplyBooleanFilter(query, fieldId, operatorType, value),

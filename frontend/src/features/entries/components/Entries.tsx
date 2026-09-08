@@ -517,10 +517,26 @@ export default function Entries({ autoOpenCreate = false }: EntriesProps) {
                     entryId={selectedEntry.id}
                     initialValues={selectedEntry.fieldValues.reduce(
                         (acc, field) => {
-                            acc[field.fieldName] = field.value;
+                            acc[field.fieldName] =
+                                field.fieldType === "reference"
+                                    ? (field.referencedEntryId ?? "")
+                                    : field.value;
                             return acc;
                         },
                         {} as Record<string, unknown>,
+                    )}
+                    referenceLabels={selectedEntry.fieldValues.reduce(
+                        (acc, field) => {
+                            if (
+                                field.fieldType === "reference" &&
+                                field.referencedEntryId
+                            ) {
+                                acc[field.fieldName] =
+                                    (field.value as string) ?? "";
+                            }
+                            return acc;
+                        },
+                        {} as Record<string, string>,
                     )}
                     onClose={() => {
                         setOpenDialogType(undefined);

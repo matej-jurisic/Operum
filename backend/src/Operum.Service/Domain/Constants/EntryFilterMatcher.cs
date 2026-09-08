@@ -39,7 +39,7 @@ namespace Operum.Service.Domain.Constants
         {
             return fieldType switch
             {
-                DataTypes.String => MatchesString(fv?.StringValue, operatorType, filterValue),
+                DataTypes.String or DataTypes.Reference => MatchesString(fv?.StringValue, operatorType, filterValue),
                 DataTypes.Number => MatchesNumber(fv?.NumberValue, operatorType, filterValue),
                 DataTypes.Date or DataTypes.DateTime => MatchesDateTime(fv?.DateTimeValue, operatorType, filterValue, tz),
                 DataTypes.TimeSpan => MatchesTimeSpan(fv?.TimeSpanValue, operatorType, filterValue),

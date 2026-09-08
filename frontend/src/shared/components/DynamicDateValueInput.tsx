@@ -82,6 +82,7 @@ export default function DynamicDateValueInput({
                     form={form}
                     fieldPath={fieldPath}
                     styles={{ flex: 1 }}
+                    referenceValueMode="label"
                 />
             )}
 

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Operum.Model;
 using Operum.Model.Common;
 using Operum.Model.Constants;
+using Operum.Model.Constants.Fields;
 using Operum.Model.DTOs.Entries;
 using Operum.Model.DTOs.Entries.Requests;
 using Operum.Model.Enums;
@@ -19,7 +20,7 @@ using System.Globalization;
 
 namespace Operum.Service.Services.Entries
 {
-    public class EntriesService(ICurrentUserService currentUserService, IAuthorizationService authorizationService, OperumContext db, IMapper mapper, ILogger<EntriesService> logger, IFormulaEvaluationService formulaEvaluationService) : IEntriesService
+    public class EntriesService(ICurrentUserService currentUserService, IAuthorizationService authorizationService, OperumContext db, IMapper mapper, ILogger<EntriesService> logger, IFormulaEvaluationService formulaEvaluationService, IReferenceLabelService referenceLabelService) : IEntriesService
     {
         public async Task<Result<EntryDto>> CreateEntry(string trackerId, CreateEntryDto entry)
         {
@@ -76,6 +77,8 @@ namespace Operum.Service.Services.Entries
 
             await formulaEvaluationService.EvaluateAndPersistCalculatedFields(
                 trackerId, newEntry.Id, entryFieldValues, fields);
+
+            await SyncEntryReferences(newEntry.Id, entryFieldValues, fields);
 
             var created = await GetEntry(trackerId, newEntry.Id);
 
@@ -155,6 +158,70 @@ namespace Operum.Service.Services.Entries
             return Result.Success(mapper.Map<Entry, EntryDto>(entry));
         }
 
+        public async Task<Result<List<EntryOptionDto>>> GetEntryOptions(string trackerId, string? displayFieldId, string? search, int limit)
+        {
+            var user = currentUserService.GetCurrentUser();
+            var tracker = await db.Trackers
+                .Include(x => x.ApplicationUserTrackers)
+                .FirstOrDefaultAsync(x => x.Id == trackerId);
+
+            var hasAccess = tracker != null && (tracker.OwnerId == user.Id || tracker.ApplicationUserTrackers.Any(x => x.ApplicationUserId == user.Id));
+            if (tracker == null || !hasAccess)
+                return Result.Failure(ResultStatusCodes.Forbidden);
+
+            limit = Math.Clamp(limit, 1, 50);
+
+            var displayField = string.IsNullOrEmpty(displayFieldId)
+                ? null
+                : await db.Fields.AsNoTracking().FirstOrDefaultAsync(f => f.Id == displayFieldId && f.TrackerId == trackerId);
+
+            // No display field: fall back to newest entries labelled by creation date.
+            if (displayField == null)
+            {
+                var recent = await db.Entries
+                    .AsNoTracking()
+                    .Where(e => e.TrackerId == trackerId)
+                    .OrderByDescending(e => e.CreatedAt)
+                    .Take(limit)
+                    .Select(e => new EntryOptionDto
+                    {
+                        Id = e.Id,
+                        Label = e.CreatedAt.ToString("yyyy-MM-dd"),
+                    })
+                    .ToListAsync();
+                return Result.Success(recent);
+            }
+
+            // Entries that have a value for the display field. One with no value for it is not
+            // pickable here, which is acceptable: the display field is normally the entry's name.
+            var valuesQuery = db.FieldValues
+                .AsNoTracking()
+                .Include(fv => fv.Field)
+                .Where(fv => fv.FieldId == displayField.Id);
+
+            if (!string.IsNullOrWhiteSpace(search)
+                && (displayField.Type == DataTypes.String || displayField.Type == DataTypes.Reference))
+            {
+                var lowered = search.Trim().ToLower();
+                valuesQuery = valuesQuery.Where(fv => fv.StringValue != null && fv.StringValue.ToLower().Contains(lowered));
+            }
+
+            var rows = await valuesQuery
+                .OrderBy(fv => fv.StringValue)
+                .Take(limit * 4)
+                .ToListAsync();
+
+            var options = rows
+                .Select(fv => new EntryOptionDto { Id = fv.EntryId, Label = fv.GetValueAsString() ?? string.Empty })
+                .Where(o => !string.IsNullOrWhiteSpace(o.Label))
+                .Where(o => string.IsNullOrWhiteSpace(search)
+                    || o.Label.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Take(limit)
+                .ToList();
+
+            return Result.Success(options);
+        }
+
         public async Task<Result<EntryDto>> UpdateEntry(string trackerId, string entryId, UpdateEntryDto updateEntry)
         {
             var user = currentUserService.GetCurrentUser();
@@ -227,6 +294,8 @@ namespace Operum.Service.Services.Entries
             await formulaEvaluationService.EvaluateAndPersistCalculatedFields(
                 trackerId, entryId, allCurrentValues, allFields);
 
+            await SyncEntryReferences(entryId, allCurrentValues, allFields);
+
             var updatedEntry = await GetEntry(trackerId, entryId);
             return Result.Success(updatedEntry.Data);
         }
@@ -246,6 +315,8 @@ namespace Operum.Service.Services.Entries
                 return Result.Failure(ResultStatusCodes.Forbidden);
             }
 
+            await ClearInboundReferences([entryId]);
+
             db.Entries.Remove(entry);
             await db.SaveChangesAsync();
 
@@ -258,9 +329,13 @@ namespace Operum.Service.Services.Entries
             {
                 var user = currentUserService.GetCurrentUser();
                 var entryIdList = selection.EntryIds;
-                await db.Entries
+                var deletableIds = await db.Entries
                     .Where(x => entryIdList.Contains(x.Id) && x.TrackerId == trackerId && (x.Tracker.OwnerId == user.Id || x.Tracker.ApplicationUserTrackers.Any(a => a.ApplicationUserId == user.Id && a.CanEditData)))
-                    .ExecuteDeleteAsync();
+                    .Select(x => x.Id)
+                    .ToListAsync();
+
+                await ClearInboundReferences(deletableIds);
+                await db.Entries.Where(x => deletableIds.Contains(x.Id)).ExecuteDeleteAsync();
 
                 return Result.Success();
             }
@@ -269,7 +344,9 @@ namespace Operum.Service.Services.Entries
             if (selectionResult.IsFailure)
                 return Result.Failure(selectionResult.StatusCode, selectionResult.Messages);
 
-            await selectionResult.Data.ExecuteDeleteAsync();
+            var matchedIds = await selectionResult.Data.Select(e => e.Id).ToListAsync();
+            await ClearInboundReferences(matchedIds);
+            await db.Entries.Where(e => matchedIds.Contains(e.Id)).ExecuteDeleteAsync();
 
             return Result.Success();
         }
@@ -301,6 +378,14 @@ namespace Operum.Service.Services.Entries
             var manualFields = fields.Where(f => !f.IsCalculated).ToList();
             var fieldsByName = manualFields.ToDictionary(f => f.Name, f => f);
             var requiredFields = manualFields.Where(f => f.Required).ToList();
+
+            // Reference columns carry the target's display label, not its id. Resolve each
+            // referenced tracker to a label -> id map (best-effort, case-insensitive exact).
+            var referenceLabelToId = new Dictionary<string, Dictionary<string, string>>();
+            foreach (var refField in manualFields.Where(f => f.Type == DataTypes.Reference && f.ReferencedTrackerId != null))
+            {
+                referenceLabelToId[refField.Id] = await BuildReferenceLabelMap(refField.ReferencedTrackerId!, refField.ReferencedDisplayFieldId);
+            }
 
             // First pass: Parse and validate all records
             var parsedRecords = new List<Dictionary<string, string>>();
@@ -399,16 +484,27 @@ namespace Operum.Service.Services.Entries
                 // Create field values for manual fields only (calculated fields are derived)
                 foreach (var kvp in parsedRecord)
                 {
-                    if (fieldsByName.TryGetValue(kvp.Key, out var field))
+                    if (!fieldsByName.TryGetValue(kvp.Key, out var field))
+                        continue;
+
+                    var rawValue = kvp.Value;
+                    if (field.Type == DataTypes.Reference)
                     {
-                        var fieldValue = new FieldValue
-                        {
-                            EntryId = newEntry.Id,
-                            FieldId = field.Id,
-                        };
-                        fieldValue.SetFieldValue(field, kvp.Value);
-                        allFieldValues.Add(fieldValue);
+                        // Translate the label in the cell to a target entry id; drop the value
+                        // entirely when nothing matches.
+                        if (!referenceLabelToId.TryGetValue(field.Id, out var map)
+                            || !map.TryGetValue(kvp.Value, out var targetId))
+                            continue;
+                        rawValue = targetId;
                     }
+
+                    var fieldValue = new FieldValue
+                    {
+                        EntryId = newEntry.Id,
+                        FieldId = field.Id,
+                    };
+                    fieldValue.SetFieldValue(field, rawValue);
+                    allFieldValues.Add(fieldValue);
                 }
             }
 
@@ -441,6 +537,7 @@ namespace Operum.Service.Services.Entries
                 var entryFieldValues = fieldValuesByEntry.TryGetValue(newEntry.Id, out var fvs) ? fvs : [];
                 await formulaEvaluationService.EvaluateAndPersistCalculatedFields(
                     trackerId, newEntry.Id, entryFieldValues, fields);
+                await SyncEntryReferences(newEntry.Id, entryFieldValues, fields);
             }
 
             return Result.Success(Messages.Success);
@@ -560,6 +657,7 @@ namespace Operum.Service.Services.Entries
 
                 await formulaEvaluationService.EvaluateAndPersistCalculatedFields(
                     trackerId, entryId, fieldValues, allFields);
+                await SyncEntryReferences(entryId, fieldValues, allFields);
             }
 
             return Result.Success();
@@ -666,16 +764,23 @@ namespace Operum.Service.Services.Entries
                     var toDelete = await db.Entries
                         .Where(x => batch.Deletes.Contains(x.Id) && x.TrackerId == trackerId)
                         .ToListAsync();
+                    await ClearInboundReferences(toDelete.Select(x => x.Id).ToList());
                     db.Entries.RemoveRange(toDelete);
                 }
 
                 var result = await db.SaveChangesAsync();
 
                 foreach (var (entry, fieldValues) in createdEntries)
+                {
                     await formulaEvaluationService.EvaluateAndPersistCalculatedFields(trackerId, entry.Id, fieldValues, fields);
+                    await SyncEntryReferences(entry.Id, fieldValues, fields);
+                }
 
                 foreach (var (entryId, allCurrent) in updatedEntries)
+                {
                     await formulaEvaluationService.EvaluateAndPersistCalculatedFields(trackerId, entryId, allCurrent, fields);
+                    await SyncEntryReferences(entryId, allCurrent, fields);
+                }
 
                 await transaction.CommitAsync();
                 return Result.Success();
@@ -685,6 +790,52 @@ namespace Operum.Service.Services.Entries
                 await transaction.RollbackAsync();
                 return Result.Failure(ResultStatusCodes.Error, "Batch save failed. No changes were applied.");
             }
+        }
+
+        // After an entry write: resolve its own reference values to fresh labels, then update
+        // any reference value in another tracker that points back at this entry.
+        private async Task SyncEntryReferences(string entryId, List<FieldValue> currentFieldValues, List<Field> allFields)
+        {
+            await referenceLabelService.ResolveEntryReferences(entryId, currentFieldValues, allFields);
+            await referenceLabelService.RefreshReferencesToEntry(entryId);
+        }
+
+        // A referenced tracker's entries keyed by display label, for resolving CSV cells.
+        // First entry wins when two share a label.
+        private async Task<Dictionary<string, string>> BuildReferenceLabelMap(string referencedTrackerId, string? displayFieldId)
+        {
+            var entries = await db.Entries
+                .AsNoTracking()
+                .Include(e => e.FieldValues)
+                    .ThenInclude(fv => fv.Field)
+                .Where(e => e.TrackerId == referencedTrackerId)
+                .ToListAsync();
+
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+            {
+                var label = displayFieldId != null
+                    ? entry.FieldValues.FirstOrDefault(fv => fv.FieldId == displayFieldId)?.GetValueAsString()
+                    : null;
+                label ??= entry.CreatedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                map.TryAdd(label, entry.Id);
+            }
+
+            return map;
+        }
+
+        // Before entries are deleted: clear the link and cached label on every reference value
+        // pointing at them (the FK is SetNull, but that would leave the stale label behind).
+        private async Task ClearInboundReferences(IReadOnlyCollection<string> deletedEntryIds)
+        {
+            if (deletedEntryIds.Count == 0)
+                return;
+
+            await db.FieldValues
+                .Where(fv => fv.ReferencedEntryId != null && deletedEntryIds.Contains(fv.ReferencedEntryId))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.ReferencedEntryId, (string?)null)
+                    .SetProperty(x => x.StringValue, (string?)null));
         }
 
         private async Task<Result<View?>> LoadView(string trackerId, string? viewId)
