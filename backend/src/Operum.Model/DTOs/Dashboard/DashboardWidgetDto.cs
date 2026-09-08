@@ -30,10 +30,11 @@ namespace Operum.Model.DTOs.Dashboard
     // One clause of a Filter widget's own typed clause set, resolved for the card to
     // render an input for: what it filters (data type + operator, shown as a label) and the
     // value currently typed on the board (null when unset -- the clause is then not applied).
-    // QueryId is the pooled query id, the key SetFilterValues writes back under.
+    // SlotId is the widget-local clause id, the key SetFilterValues writes back under and the
+    // key a goal's conditional target names it by.
     public class FilterClauseDto
     {
-        public string QueryId { get; set; } = string.Empty;
+        public string SlotId { get; set; } = string.Empty;
         public string Kind { get; set; } = string.Empty;
         public string DataType { get; set; } = string.Empty;
         public string? Operator { get; set; }

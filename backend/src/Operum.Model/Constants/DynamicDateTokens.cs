@@ -1,3 +1,4 @@
+using System.Globalization;
 using Operum.Model.Extensions;
 
 namespace Operum.Model.Constants
@@ -47,6 +48,28 @@ namespace Operum.Model.Constants
 
         public static bool IsValid(string token) =>
             token == Now || TryParseAnchor(token, out _, out _) || TryParseLookback(token, out _, out _);
+
+        /// <summary>
+        /// Resolves a stored date filter value to a UTC instant, whether it is a dynamic token
+        /// (<c>start_of_month</c>) or a literal ISO date/datetime. Returns null when it is neither.
+        /// Lets a token and the concrete date it currently points at be compared as equals.
+        /// </summary>
+        public static DateTime? ResolveValue(string? value, TimeZoneInfo tz)
+        {
+            if (string.IsNullOrEmpty(value))
+                return null;
+
+            var resolved = Resolve(value, tz);
+            if (resolved.HasValue)
+                return resolved;
+
+            if (!DateTime.TryParse(value, null, DateTimeStyles.RoundtripKind, out var parsed))
+                return null;
+
+            return parsed.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(parsed, DateTimeKind.Utc)
+                : parsed.ToUniversalTime();
+        }
 
         public static DateTime? Resolve(string token, TimeZoneInfo tz)
         {

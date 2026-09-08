@@ -65,7 +65,7 @@ export function FilterWidgetCard({
     const form = useForm<{ values: Record<string, unknown> }>({
         initialValues: {
             values: Object.fromEntries(
-                clauses.map((c) => [c.queryId, c.value ?? ""]),
+                clauses.map((c) => [c.slotId, c.value ?? ""]),
             ),
         },
     });
@@ -73,7 +73,7 @@ export function FilterWidgetCard({
     const openEditor = () => {
         form.setValues({
             values: Object.fromEntries(
-                clauses.map((c) => [c.queryId, c.value ?? ""]),
+                clauses.map((c) => [c.slotId, c.value ?? ""]),
             ),
         });
         setEditing(true);
@@ -88,14 +88,14 @@ export function FilterWidgetCard({
         commit(
             Object.fromEntries(
                 clauses.map((c) => [
-                    c.queryId,
-                    normalizeClauseValue(form.values.values[c.queryId]),
+                    c.slotId,
+                    normalizeClauseValue(form.values.values[c.slotId]),
                 ]),
             ),
         );
 
     const clearAll = () =>
-        commit(Object.fromEntries(clauses.map((c) => [c.queryId, null])));
+        commit(Object.fromEntries(clauses.map((c) => [c.slotId, null])));
 
     // Picking a preset only fills the inputs -- the user still reviews and hits Apply.
     const applyPreset = (presetId: string) => {
@@ -103,7 +103,7 @@ export function FilterWidgetCard({
         if (!preset) return;
         form.setValues({
             values: Object.fromEntries(
-                clauses.map((c, i) => [c.queryId, preset.values[i] ?? ""]),
+                clauses.map((c, i) => [c.slotId, preset.values[i] ?? ""]),
             ),
         });
     };
@@ -164,7 +164,7 @@ export function FilterWidgetCard({
                         <ScrollArea.Autosize mah="60vh">
                             <Stack gap="sm">
                                 {clauses.map((c) => (
-                                    <Stack key={c.queryId} gap={2}>
+                                    <Stack key={c.slotId} gap={2}>
                                         <Text size="xs" fw={500} c="dimmed">
                                             {clauseLabel(
                                                 c.dataType,
@@ -177,7 +177,7 @@ export function FilterWidgetCard({
                                             )}
                                             value={
                                                 form.values.values[
-                                                    c.queryId
+                                                    c.slotId
                                                 ] as
                                                     | string
                                                     | number
@@ -186,16 +186,16 @@ export function FilterWidgetCard({
                                             }
                                             onChange={(v) =>
                                                 form.setFieldValue(
-                                                    `values.${c.queryId}`,
+                                                    `values.${c.slotId}`,
                                                     v,
                                                 )
                                             }
                                             field={syntheticField(
-                                                c.queryId,
+                                                c.slotId,
                                                 c.dataType,
                                             )}
                                             form={form}
-                                            fieldPath={`values.${c.queryId}`}
+                                            fieldPath={`values.${c.slotId}`}
                                         />
                                     </Stack>
                                 ))}

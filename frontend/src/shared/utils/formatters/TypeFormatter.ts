@@ -33,6 +33,15 @@ export const formatDateOnly = (value?: string) =>
         })
         : "";
 
+export const formatDateOnlyFromDate = (date?: Date) =>
+    date
+        ? date.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+        })
+        : "";
+
 const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 const RELATIVE_STEPS: [Intl.RelativeTimeFormatUnit, number][] = [
     ["year", 60 * 60 * 24 * 365],

@@ -12,12 +12,12 @@ import {
 import { clauseLabel } from "./filterClauseInput";
 
 /** One of the board's existing filter widgets, offered as something a newly created widget
-    can follow -- its clauses, keyed by their real pooled query id since (unlike the
-    creation forms) this widget's shape is already saved. */
+    can follow -- its clauses, keyed by their stable slot id since (unlike the creation
+    forms) this widget's shape is already saved. */
 export interface FilterCandidate {
     itemId: string;
     label: string;
-    queries: { queryId: string; dataType: string; describe: string }[];
+    queries: { slotId: string; dataType: string; describe: string }[];
 }
 
 /** The board's filter widgets a new widget's tracker(s) could follow, one entry per Filter
@@ -37,7 +37,7 @@ export function filterCandidatesFor(widgets: DashboardWidgetDto[]): FilterCandid
             itemId: w.id,
             label: n > 1 ? `${base} (${n})` : base,
             queries: clauses.map((c) => ({
-                queryId: c.queryId,
+                slotId: c.slotId,
                 dataType: c.dataType,
                 describe: clauseLabel(c.dataType, c.operator),
             })),
@@ -50,7 +50,7 @@ export function filterCandidatesFor(widgets: DashboardWidgetDto[]): FilterCandid
     widget's create/place dto to have it linked up in the same step. */
 export interface FilterFollowLinks {
     trackerId: string;
-    /** filterItemId -> (that filter's pooled query id -> field id on `trackerId`) */
+    /** filterItemId -> (that filter's clause slot id -> field id on `trackerId`) */
     links: Record<string, Record<string, string>>;
 }
 
@@ -64,21 +64,21 @@ export function followLinksComplete(
 ): boolean {
     const eligibleFields = (dataType: string) =>
         fields.filter((f) => fieldTypesCompatible(f.type, dataType));
-    return Object.entries(links).every(([filterItemId, fieldByQuery]) => {
+    return Object.entries(links).every(([filterItemId, fieldBySlot]) => {
         const filter = filters.find((f) => f.itemId === filterItemId);
         if (!filter) return false;
         return filter.queries.every((q) => {
-            const fieldId = fieldByQuery[q.queryId];
+            const fieldId = fieldBySlot[q.slotId];
             return !!fieldId && eligibleFields(q.dataType).some((f) => f.id === fieldId);
         });
     });
 }
 
-/** A filter widget's clause list, keyed by its pooled query id -> that clause's index in
-    the widget's own clause order -- the key SaveFilterItemDto's links expect, since the
-    backend only knows pooled ids once a save resolves them. */
-export function filterWidgetIndexByQueryId(widget: DashboardWidgetDto): Map<string, string> {
-    return new Map((widget.filter?.clauses ?? []).map((c, i) => [c.queryId, String(i)]));
+/** A filter widget's clause list, keyed by its slot id -> that clause's index in the
+    widget's own clause order -- the key SaveFilterItemDto's links expect, since the backend
+    rewrites those indices back to slot ids on save. */
+export function filterWidgetIndexBySlotId(widget: DashboardWidgetDto): Map<string, string> {
+    return new Map((widget.filter?.clauses ?? []).map((c, i) => [c.slotId, String(i)]));
 }
 
 /** Rebuilds the SaveFilterItemDto an existing filter widget would resubmit unchanged: same
@@ -89,7 +89,7 @@ export function filterWidgetIndexByQueryId(widget: DashboardWidgetDto): Map<stri
 export function filterWidgetToSaveDto(widget: DashboardWidgetDto): SaveFilterItemDto {
     const config = parseFilterWidgetConfig(widget.config);
     const clauseDtos = widget.filter?.clauses ?? [];
-    const indexByQueryId = filterWidgetIndexByQueryId(widget);
+    const indexBySlotId = filterWidgetIndexBySlotId(widget);
 
     const clauses: ClauseDto[] = clauseDtos.map((c) => ({
         kind: QueryKinds.Filter,
@@ -103,8 +103,8 @@ export function filterWidgetToSaveDto(widget: DashboardWidgetDto): SaveFilterIte
         itemId: l.itemId,
         trackerId: l.trackerId,
         fieldByQuery: Object.fromEntries(
-            Object.entries(l.fieldByQuery).flatMap(([queryId, fieldId]) => {
-                const index = indexByQueryId.get(queryId);
+            Object.entries(l.fieldByQuery).flatMap(([slotId, fieldId]) => {
+                const index = indexBySlotId.get(slotId);
                 return index !== undefined ? [[index, fieldId]] : [];
             }),
         ),
@@ -113,18 +113,18 @@ export function filterWidgetToSaveDto(widget: DashboardWidgetDto): SaveFilterIte
     return { clauses, links, presetIds: config?.presetIds ?? [] };
 }
 
-/** Converts one follower's pooled-query-id field mapping into the clause-index-keyed
+/** Converts one follower's slot-id-keyed field mapping into the clause-index-keyed
     WidgetLink a filter widget's SaveFilterItemDto expects. */
 export function toFollowerLink(
-    indexByQueryId: Map<string, string>,
-    follower: { itemId: string; trackerId: string; fieldByQueryId: Record<string, string> },
+    indexBySlotId: Map<string, string>,
+    follower: { itemId: string; trackerId: string; fieldBySlotId: Record<string, string> },
 ): WidgetLink {
     return {
         itemId: follower.itemId,
         trackerId: follower.trackerId,
         fieldByQuery: Object.fromEntries(
-            Object.entries(follower.fieldByQueryId).flatMap(([queryId, fieldId]) => {
-                const index = indexByQueryId.get(queryId);
+            Object.entries(follower.fieldBySlotId).flatMap(([slotId, fieldId]) => {
+                const index = indexBySlotId.get(slotId);
                 return index !== undefined ? [[index, fieldId]] : [];
             }),
         ),

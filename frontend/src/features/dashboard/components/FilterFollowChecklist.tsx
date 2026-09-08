@@ -9,7 +9,7 @@ interface Props {
     fields: FieldDto[];
     /** The board's existing filter widgets this widget could follow. */
     filters: FilterCandidate[];
-    /** filterItemId -> (that filter's pooled query id -> field id), for the filters
+    /** filterItemId -> (that filter's clause slot id -> field id), for the filters
         currently checked. */
     links: Record<string, Record<string, string>>;
     onLinksChange: (links: Record<string, Record<string, string>>) => void;
@@ -35,11 +35,11 @@ export function FilterFollowChecklist({ fields, filters, links, onLinksChange }:
             if (!current) continue;
             let patched = current;
             for (const q of filter.queries) {
-                if (patched[q.queryId]) continue;
+                if (patched[q.slotId]) continue;
                 const matches = eligibleFields(q.dataType);
                 if (matches.length !== 1) continue;
                 if (patched === current) patched = { ...patched };
-                patched[q.queryId] = matches[0].id;
+                patched[q.slotId] = matches[0].id;
                 changed = true;
             }
             if (patched !== current) next[filter.itemId] = patched;
@@ -85,7 +85,7 @@ export function FilterFollowChecklist({ fields, filters, links, onLinksChange }:
                             <Group gap="sm" pl="lg" wrap="wrap">
                                 {choices.map((q) => (
                                     <Select
-                                        key={q.queryId}
+                                        key={q.slotId}
                                         size="xs"
                                         w={200}
                                         label={q.describe}
@@ -95,13 +95,13 @@ export function FilterFollowChecklist({ fields, filters, links, onLinksChange }:
                                             value: f.id,
                                             label: f.name,
                                         }))}
-                                        value={fieldByQuery[q.queryId] ?? null}
+                                        value={fieldByQuery[q.slotId] ?? null}
                                         onChange={(fieldId) =>
                                             onLinksChange({
                                                 ...links,
                                                 [filter.itemId]: {
                                                     ...fieldByQuery,
-                                                    ...(fieldId ? { [q.queryId]: fieldId } : {}),
+                                                    ...(fieldId ? { [q.slotId]: fieldId } : {}),
                                                 },
                                             })
                                         }

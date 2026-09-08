@@ -154,16 +154,28 @@ namespace Operum.Service.Services.Dashboards
                 .Where(x => x.Config != null)
                 .ToDictionary(x => x.ItemId, x => x.Config!);
 
-            // The pooled clause behind every filter widget's Config.QueryIds, so the loop
-            // below can render its inputs and layer it onto the widgets it follows.
+            // The pooled clause behind every filter widget's clause slots, so the loop below
+            // can render its inputs and layer it onto the widgets it follows.
             var filterQueryIds = filterConfigsByItemId.Values
-                .SelectMany(c => c.QueryIds)
+                .SelectMany(c => c.Slots.Select(s => s.QueryId))
                 .Distinct()
                 .ToList();
 
             var filterQueriesById = filterQueryIds.Count > 0
                 ? await db.Queries.Where(q => filterQueryIds.Contains(q.Id)).ToDictionaryAsync(q => q.Id)
                 : new Dictionary<string, Query>();
+
+            // Clause data type keyed by slot id -- and, so a conditional target saved before
+            // the slot model still resolves, by the underlying pooled query id too. Lets a
+            // goal's conditional target compare a date token against a date clause.
+            var filterClauseDataTypes = new Dictionary<string, string>();
+            foreach (var cfg in filterConfigsByItemId.Values)
+                foreach (var slot in cfg.Slots)
+                    if (filterQueriesById.TryGetValue(slot.QueryId, out var slotQuery))
+                    {
+                        filterClauseDataTypes[slot.SlotId] = slotQuery.DataType;
+                        filterClauseDataTypes.TryAdd(slot.QueryId, slotQuery.DataType);
+                    }
 
             var dashboardViewsById = (await db.DashboardViews
                     .Where(dv => dv.DashboardId == dashboard.Id)
@@ -202,23 +214,22 @@ namespace Operum.Service.Services.Dashboards
                     if (item.Type == DashboardWidgetTypes.Filter &&
                         filterConfigsByItemId.TryGetValue(item.Id, out var filterConfig))
                     {
-                        var widgetClauses = filterConfig.QueryIds
-                            .Distinct()
-                            .Where(filterQueriesById.ContainsKey)
-                            .Select(id => filterQueriesById[id])
-                            .Where(q => q.Kind == QueryKinds.Filter)
+                        var slotClauses = filterConfig.Slots
+                            .Where(s => filterQueriesById.ContainsKey(s.QueryId))
+                            .Select(s => (Slot: s, Query: filterQueriesById[s.QueryId]))
+                            .Where(x => x.Query.Kind == QueryKinds.Filter)
                             .ToList();
 
                         filter = new FilterWidgetDto
                         {
-                            Clauses = widgetClauses
-                                .Select(q => new FilterClauseDto
+                            Clauses = slotClauses
+                                .Select(x => new FilterClauseDto
                                 {
-                                    QueryId = q.Id,
-                                    Kind = q.Kind,
-                                    DataType = q.DataType,
-                                    Operator = q.Operator,
-                                    Value = filterConfig.ValueByQuery.GetValueOrDefault(q.Id)
+                                    SlotId = x.Slot.SlotId,
+                                    Kind = x.Query.Kind,
+                                    DataType = x.Query.DataType,
+                                    Operator = x.Query.Operator,
+                                    Value = filterConfig.ValueBySlot.GetValueOrDefault(x.Slot.SlotId)
                                 })
                                 .ToList(),
                             // Only presets whose clause shape still matches the widget's are
@@ -227,7 +238,7 @@ namespace Operum.Service.Services.Dashboards
                             Presets = filterConfig.PresetIds
                                 .Distinct()
                                 .Where(dashboardViewsById.ContainsKey)
-                                .Select(id => (Id: id, Values: PresetValuesForShape(dashboardViewsById[id], widgetClauses)))
+                                .Select(id => (Id: id, Values: PresetValuesForShape(dashboardViewsById[id], slotClauses.Select(x => x.Query).ToList())))
                                 .Where(p => p.Values != null)
                                 .Select(p => new FilterPresetOptionDto
                                 {
@@ -267,7 +278,9 @@ namespace Operum.Service.Services.Dashboards
                     : ResolveGoalTarget(
                         item.Widget.GoalTarget,
                         ParseGoalConditionalTargets(item.GoalConditionalTargets),
-                        ConnectedFilterValues(item.Id, filterConfigsByItemId.Values));
+                        ConnectedFilterValues(item.Id, filterConfigsByItemId.Values),
+                        filterClauseDataTypes,
+                        currentUserService.GetCurrentUserTimeZone());
 
                 var resolvedSources = new List<ResolvedSource>();
 
@@ -677,7 +690,7 @@ namespace Operum.Service.Services.Dashboards
         private async Task<Result> ValidateFollowerLinks(
             Dashboard dashboard,
             List<WidgetLinkDto> links,
-            IReadOnlyDictionary<string, Query> queriesById,
+            IReadOnlyDictionary<string, Query> clauseQueriesBySlot,
             string label)
         {
             var seenLinks = new HashSet<string>();
@@ -699,9 +712,9 @@ namespace Operum.Service.Services.Dashboards
                 if (!ResolveItemTrackerIds(target).Contains(link.TrackerId))
                     return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("tracker for this widget"));
 
-                foreach (var (queryId, fieldId) in link.FieldByQuery)
+                foreach (var (slotId, fieldId) in link.FieldByQuery)
                 {
-                    if (!queriesById.TryGetValue(queryId, out var query))
+                    if (!clauseQueriesBySlot.TryGetValue(slotId, out var query))
                         return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid($"clause for this {label}"));
 
                     if (!fields.TryGetValue(fieldId, out var field) ||
@@ -759,22 +772,23 @@ namespace Operum.Service.Services.Dashboards
             if (item == null)
                 return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound("filter widget"));
 
-            var built = await BuildFilterConfig(dashboard, user.Id, dto);
+            var previous = TryParseFilterConfig(item.Config);
+
+            var built = await BuildFilterConfig(dashboard, user.Id, dto, previous?.Slots);
             if (!built.IsSuccess)
                 return Result.Failure(built.StatusCode, built.Messages);
 
             // The edit form only carries clause shape, never the values the clauses are
             // currently set to -- those are typed on the board (SetFilterValues) and live
-            // only in ValueByQuery. Carry them across for every clause that survived the
-            // edit: an unchanged clause shape pools to the same Query id, so a value whose
-            // id still appears in the rebuilt config is still valid for that clause.
-            var previous = TryParseFilterConfig(item.Config);
+            // only in ValueBySlot. Carry them across for every slot that survived the edit:
+            // BuildFilterConfig keeps a slot's id when its clause shape is unchanged, so a
+            // value whose slot id still appears in the rebuilt config is still valid.
             if (previous != null)
             {
-                var surviving = built.Data!.QueryIds.ToHashSet();
-                foreach (var (queryId, value) in previous.ValueByQuery)
-                    if (!string.IsNullOrEmpty(value) && surviving.Contains(queryId))
-                        built.Data!.ValueByQuery[queryId] = value;
+                var surviving = built.Data!.Slots.Select(s => s.SlotId).ToHashSet();
+                foreach (var (slotId, value) in previous.ValueBySlot)
+                    if (!string.IsNullOrEmpty(value) && surviving.Contains(slotId))
+                        built.Data!.ValueBySlot[slotId] = value;
             }
 
             item.Config = JsonSerializer.Serialize(built.Data, ConfigJsonOptions);
@@ -797,15 +811,16 @@ namespace Operum.Service.Services.Dashboards
             if (item == null || config == null)
                 return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound("filter widget"));
 
-            var queries = await db.Queries
-                .Where(q => config.QueryIds.Contains(q.Id))
-                .ToListAsync();
+            var slotQueryIds = config.Slots.Select(s => s.QueryId).Distinct().ToList();
+            var queriesById = await db.Queries
+                .Where(q => slotQueryIds.Contains(q.Id))
+                .ToDictionaryAsync(q => q.Id);
 
-            var valueCheck = ValidateFilterValues(queries, dto.Values);
+            var valueCheck = ValidateFilterValues(config.Slots, queriesById, dto.Values);
             if (!valueCheck.IsSuccess)
                 return Result.Failure(valueCheck.StatusCode, valueCheck.Messages);
 
-            config.ValueByQuery = NormalizeValues(dto.Values);
+            config.ValueBySlot = NormalizeValues(dto.Values);
             item.Config = JsonSerializer.Serialize(config, ConfigJsonOptions);
             await db.SaveChangesAsync();
 
@@ -815,52 +830,76 @@ namespace Operum.Service.Services.Dashboards
         // Resolves a SaveFilterItemDto into the Config the widget stores.
         //
         // Clauses: the sent clauses pooled into Query rows (ResolveDashboardViewClauses
-        // validates them and enforces the filter/query limits), each link's index-keyed
-        // FieldByQuery rewritten to those pooled ids and checked against its follower, and
-        // the starting value per clause.
+        // validates them and enforces the filter/query limits), each assigned a slot id
+        // (kept from `existingSlots` when the clause shape is unchanged, minted fresh
+        // otherwise), each link's index-keyed FieldByQuery rewritten to those slot ids and
+        // checked against its follower, and the starting value per clause.
         //
         // Presets: every id must be a DashboardView on this board whose filter clauses, in
         // order, are the same (data type, operator) list as the widget's clauses -- a preset
         // is just a named set of values for this exact clause set.
-        private async Task<Result<FilterWidgetConfigDto>> BuildFilterConfig(Dashboard dashboard, string ownerId, SaveFilterItemDto dto)
+        private async Task<Result<FilterWidgetConfigDto>> BuildFilterConfig(
+            Dashboard dashboard, string ownerId, SaveFilterItemDto dto,
+            IReadOnlyList<FilterClauseSlotDto>? existingSlots = null)
         {
             var resolved = await ResolveDashboardViewClauses(ownerId, dto.Clauses);
             if (resolved.IsFailure)
                 return Result.Failure(resolved.StatusCode, resolved.Messages);
 
-            // QueryIds runs parallel to dto.Clauses; a link's FieldByQuery keys are clause
-            // indices into that list, rewritten here to the pooled id each clause resolved to.
-            var queryIds = resolved.Data!.Select(q => q.Id).ToList();
-            var queriesById = resolved.Data!.DistinctBy(q => q.Id).ToDictionary(q => q.Id);
+            var queries = resolved.Data!;
 
+            // A slot id per clause position. A surviving clause -- same pooled query, matched
+            // greedily by shape against the slots the widget already had -- keeps its slot
+            // id, so its typed value, its follower field maps and any goal conditional target
+            // keyed off it ride through the edit; a new or reshaped clause gets a fresh id.
+            var reusable = (existingSlots ?? [])
+                .GroupBy(s => s.QueryId)
+                .ToDictionary(g => g.Key, g => new Queue<string>(g.Select(s => s.SlotId)));
+
+            var slots = new List<FilterClauseSlotDto>(queries.Count);
+            foreach (var query in queries)
+            {
+                var slotId = reusable.TryGetValue(query.Id, out var pool) && pool.Count > 0
+                    ? pool.Dequeue()
+                    : Guid.NewGuid().ToString();
+                slots.Add(new FilterClauseSlotDto { SlotId = slotId, QueryId = query.Id });
+            }
+
+            var queriesBySlot = slots
+                .Select((slot, i) => (slot.SlotId, Query: queries[i]))
+                .ToDictionary(x => x.SlotId, x => x.Query);
+
+            // A link's FieldByQuery arrives keyed by clause index; rewrite each to that
+            // clause's slot id. Two clauses of the same shape now stay distinct here rather
+            // than the second overwriting the first.
             var mappedLinks = new List<WidgetLinkDto>();
             foreach (var link in dto.Links)
             {
-                var fieldByQuery = new Dictionary<string, string>();
+                var fieldBySlot = new Dictionary<string, string>();
                 foreach (var (key, fieldId) in link.FieldByQuery)
                 {
-                    if (!int.TryParse(key, out var index) || index < 0 || index >= queryIds.Count)
+                    if (!int.TryParse(key, out var index) || index < 0 || index >= slots.Count)
                         return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("clause for this filter widget"));
-                    fieldByQuery[queryIds[index]] = fieldId;
+                    fieldBySlot[slots[index].SlotId] = fieldId;
                 }
                 mappedLinks.Add(new WidgetLinkDto
                 {
                     ItemId = link.ItemId,
                     TrackerId = link.TrackerId,
-                    FieldByQuery = fieldByQuery
+                    FieldByQuery = fieldBySlot
                 });
             }
 
-            var linkCheck = await ValidateFollowerLinks(dashboard, mappedLinks, queriesById, "filter widget");
+            var linkCheck = await ValidateFollowerLinks(dashboard, mappedLinks, queriesBySlot, "filter widget");
             if (linkCheck.IsFailure)
                 return Result.Failure(linkCheck.StatusCode, linkCheck.Messages);
 
-            var valueByQuery = new Dictionary<string, string?>();
-            for (var i = 0; i < queryIds.Count; i++)
+            var valueBySlot = new Dictionary<string, string?>();
+            for (var i = 0; i < slots.Count; i++)
             {
                 var value = dto.Clauses[i].Value;
                 if (!string.IsNullOrEmpty(value))
-                    valueByQuery[queryIds[i]] = value;
+                    valueBySlot[slots[i].SlotId] = value;
             }
 
             var presetIds = dto.PresetIds.Distinct().ToList();
@@ -876,31 +915,33 @@ namespace Operum.Service.Services.Dashboards
 
                 // A preset may only be offered if its clause shape still matches this
                 // widget's exactly -- it is a value set for this clause set, nothing else.
-                if (presetViews.Any(v => PresetValuesForShape(v, resolved.Data!) == null))
+                if (presetViews.Any(v => PresetValuesForShape(v, queries) == null))
                     return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("preset for this filter widget's clauses"));
             }
 
             return Result.Success(new FilterWidgetConfigDto
             {
-                QueryIds = queryIds,
-                ValueByQuery = valueByQuery,
+                Slots = slots,
+                ValueBySlot = valueBySlot,
                 Links = mappedLinks,
                 PresetIds = presetIds
             });
         }
 
-        // Every key names a filter clause the widget holds; every non-empty value parses for
-        // that clause's operator and data type (the same check the clause editor runs).
-        private static Result ValidateFilterValues(IEnumerable<Query> queries, Dictionary<string, string?> values)
+        // Every key names a filter clause slot the widget holds; every non-empty value parses
+        // for that clause's operator and data type (the same check the clause editor runs).
+        private static Result ValidateFilterValues(
+            IReadOnlyList<FilterClauseSlotDto> slots,
+            IReadOnlyDictionary<string, Query> queriesById,
+            Dictionary<string, string?> values)
         {
-            var filtersById = queries
-                .Where(q => q.Kind == QueryKinds.Filter)
-                .DistinctBy(q => q.Id)
-                .ToDictionary(q => q.Id);
+            var filterQueryBySlot = slots
+                .Where(s => queriesById.TryGetValue(s.QueryId, out var q) && q.Kind == QueryKinds.Filter)
+                .ToDictionary(s => s.SlotId, s => queriesById[s.QueryId]);
 
-            foreach (var (queryId, value) in values)
+            foreach (var (slotId, value) in values)
             {
-                if (!filtersById.TryGetValue(queryId, out var query))
+                if (!filterQueryBySlot.TryGetValue(slotId, out var query))
                     return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("clause for this filter widget"));
 
                 if (string.IsNullOrEmpty(value))
@@ -1411,14 +1452,16 @@ namespace Operum.Service.Services.Dashboards
             string? conditionalTargetsJson = null;
             if (item.Widget?.ResultType == AnalyticTypes.Goal && dto.GoalConditionalTargets.Count > 0)
             {
-                var connectedQueryIds = dashboard.Items
+                var filterConfigs = dashboard.Items
                     .Where(i => i.Type == DashboardWidgetTypes.Filter)
                     .Select(i => TryParseFilterConfig(i.Config))
                     .Where(c => c != null)
-                    .SelectMany(c => c!.Links)
-                    .Where(l => l.ItemId == item.Id)
-                    .SelectMany(l => l.FieldByQuery.Keys)
-                    .ToHashSet();
+                    .Select(c => c!)
+                    .ToList();
+
+                // Slot ids this placement follows, plus -- for a conditional target saved
+                // before the slot model -- the underlying pooled query ids.
+                var connectedKeys = ConnectedFilterValues(item.Id, filterConfigs).Keys.ToHashSet();
 
                 var valueFieldType = item.Sources
                     .SelectMany(s => s.WidgetSource?.Fields ?? [])
@@ -1429,7 +1472,7 @@ namespace Operum.Service.Services.Dashboards
                     if (row.Conditions.Count == 0)
                         return Result.Failure(ResultStatusCodes.BadRequest, Messages.Required("a condition for every conditional target"));
 
-                    if (!row.Conditions.Keys.All(connectedQueryIds.Contains))
+                    if (!row.Conditions.Keys.All(connectedKeys.Contains))
                         return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("condition for a filter this widget doesn't follow"));
 
                     var target = row.Target?.Trim() ?? string.Empty;
@@ -1699,8 +1742,8 @@ namespace Operum.Service.Services.Dashboards
         }
 
         // The clauses every filter widget contributes to one widget's (item, tracker) pair.
-        // The widget owns its clause set (Config.QueryIds) and the filter value is the one
-        // typed on the board (Config.ValueByQuery). A filter whose value is blank is dropped
+        // The widget owns its clause set (Config.Slots) and the filter value is the one typed
+        // on the board (Config.ValueBySlot). A filter whose value is blank is dropped
         // entirely -- the filter just hasn't been set yet -- unless its operator is one that
         // reads a blank as "is empty" / "has a value" on its own.
         private static (List<ResolvedClause> Filters, List<ResolvedClause> Sorts) ResolveFilterClauses(
@@ -1719,12 +1762,12 @@ namespace Operum.Service.Services.Dashboards
                     l.ItemId == itemId && l.TrackerId == trackerId);
                 if (link == null) continue;
 
-                foreach (var queryId in config.QueryIds.Distinct())
+                foreach (var slot in config.Slots)
                 {
-                    if (!filterQueriesById.TryGetValue(queryId, out var query))
+                    if (!filterQueriesById.TryGetValue(slot.QueryId, out var query))
                         continue;
 
-                    if (!link.FieldByQuery.TryGetValue(queryId, out var fieldId) ||
+                    if (!link.FieldByQuery.TryGetValue(slot.SlotId, out var fieldId) ||
                         !selectorFieldsById.TryGetValue(fieldId, out var field))
                         continue;
 
@@ -1734,7 +1777,7 @@ namespace Operum.Service.Services.Dashboards
                         continue;
                     }
 
-                    var value = config.ValueByQuery.GetValueOrDefault(queryId);
+                    var value = config.ValueBySlot.GetValueOrDefault(slot.SlotId);
 
                     // A blank value only means something for the two equality operators
                     // ("is empty" / "has a value"); for anything else it means the filter
@@ -1941,12 +1984,75 @@ namespace Operum.Service.Services.Dashboards
 
             try
             {
-                return JsonSerializer.Deserialize<FilterWidgetConfigDto>(config, ConfigJsonOptions);
+                var parsed = JsonSerializer.Deserialize<FilterWidgetConfigDto>(config, ConfigJsonOptions);
+                if (parsed == null)
+                    return null;
+                if (parsed.Slots.Count > 0)
+                    return parsed;
+
+                // Pre-slot config: fold the parallel QueryIds list + query-id-keyed maps
+                // into slots. Anything without a QueryIds list is just an empty widget.
+                var legacy = JsonSerializer.Deserialize<LegacyFilterConfig>(config, ConfigJsonOptions);
+                return legacy?.QueryIds is { Count: > 0 }
+                    ? FromLegacyFilterConfig(legacy)
+                    : parsed;
             }
             catch (JsonException)
             {
                 return null;
             }
+        }
+
+        // The pre-slot filter Config shape, read only to fold it forward (see below).
+        private sealed class LegacyFilterConfig
+        {
+            public List<string>? QueryIds { get; set; }
+            public Dictionary<string, string?>? ValueByQuery { get; set; }
+            public List<WidgetLinkDto>? Links { get; set; }
+            public List<string>? PresetIds { get; set; }
+        }
+
+        // A clause whose (kind/type/operator) shape is unique in the widget keeps its pooled
+        // query id as its slot id, so a value or a goal conditional target already keyed off
+        // that id still resolves after the fold. Only genuinely duplicated clauses -- the
+        // ones the slot model exists to tell apart -- get a suffixed id, and the single
+        // field/value the old config could hold for them lands on the first.
+        private static FilterWidgetConfigDto FromLegacyFilterConfig(LegacyFilterConfig legacy)
+        {
+            var queryIds = legacy.QueryIds!;
+            var duplicated = queryIds.GroupBy(id => id).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
+
+            var slots = queryIds
+                .Select((id, i) => new FilterClauseSlotDto
+                {
+                    SlotId = duplicated.Contains(id) ? $"{id}~{i}" : id,
+                    QueryId = id
+                })
+                .ToList();
+
+            var slotByQuery = new Dictionary<string, string>();
+            foreach (var slot in slots)
+                slotByQuery.TryAdd(slot.QueryId, slot.SlotId);
+
+            Dictionary<string, TValue> Remap<TValue>(IEnumerable<KeyValuePair<string, TValue>>? map) =>
+                (map ?? [])
+                    .Where(kv => slotByQuery.ContainsKey(kv.Key))
+                    .ToDictionary(kv => slotByQuery[kv.Key], kv => kv.Value);
+
+            return new FilterWidgetConfigDto
+            {
+                Slots = slots,
+                ValueBySlot = Remap(legacy.ValueByQuery),
+                Links = (legacy.Links ?? [])
+                    .Select(l => new WidgetLinkDto
+                    {
+                        ItemId = l.ItemId,
+                        TrackerId = l.TrackerId,
+                        FieldByQuery = Remap(l.FieldByQuery)
+                    })
+                    .ToList(),
+                PresetIds = legacy.PresetIds ?? []
+            };
         }
 
         private static TabsContainerConfigDto? TryParseTabsContainerConfig(string? config)
@@ -1982,17 +2088,29 @@ namespace Operum.Service.Services.Dashboards
         }
 
         // The value each filter clause this goal placement follows is currently set to on the
-        // board, keyed by pooled query id. A clause the placement doesn't follow isn't in
-        // here at all, which is what keeps a conditional target from matching on a filter it
-        // was never connected to.
+        // board, keyed by slot id (and by the underlying pooled query id too, so a
+        // conditional target saved before the slot model still resolves). A clause the
+        // placement doesn't follow isn't in here at all, which is what keeps a conditional
+        // target from matching on a filter it was never connected to.
         private static Dictionary<string, string?> ConnectedFilterValues(
             string itemId, IEnumerable<FilterWidgetConfigDto> filterConfigs)
         {
             var values = new Dictionary<string, string?>();
             foreach (var config in filterConfigs)
-                foreach (var link in config.Links.Where(l => l.ItemId == itemId))
-                    foreach (var queryId in link.FieldByQuery.Keys)
-                        values[queryId] = config.ValueByQuery.GetValueOrDefault(queryId);
+            {
+                var followed = config.Links
+                    .Where(l => l.ItemId == itemId)
+                    .SelectMany(l => l.FieldByQuery.Keys)
+                    .ToHashSet();
+
+                foreach (var slot in config.Slots)
+                {
+                    if (!followed.Contains(slot.SlotId)) continue;
+                    var value = config.ValueBySlot.GetValueOrDefault(slot.SlotId);
+                    values[slot.SlotId] = value;
+                    values.TryAdd(slot.QueryId, value);
+                }
+            }
             return values;
         }
 
@@ -2002,7 +2120,9 @@ namespace Operum.Service.Services.Dashboards
         private static string? ResolveGoalTarget(
             string? defaultTarget,
             List<GoalConditionalTargetDto> conditionalTargets,
-            IReadOnlyDictionary<string, string?> connectedValues)
+            IReadOnlyDictionary<string, string?> connectedValues,
+            IReadOnlyDictionary<string, string> clauseDataTypes,
+            TimeZoneInfo tz)
         {
             foreach (var row in conditionalTargets)
             {
@@ -2011,13 +2131,42 @@ namespace Operum.Service.Services.Dashboards
 
                 var matches = row.Conditions.All(condition =>
                     connectedValues.TryGetValue(condition.Key, out var current) &&
-                    string.Equals(current ?? string.Empty, condition.Value ?? string.Empty, StringComparison.Ordinal));
+                    ConditionValueMatches(
+                        current, condition.Value, clauseDataTypes.GetValueOrDefault(condition.Key), tz));
 
                 if (matches)
                     return row.Target;
             }
 
             return defaultTarget;
+        }
+
+        // A condition matches the clause's current value on an exact string match, or -- for a
+        // date or datetime clause -- when both sides resolve to the same instant. That lets a
+        // row keyed on "start of month" match a filter a user set to the literal first-of-month
+        // date, and the reverse. A date clause compares by calendar day, matching how a date
+        // filter itself treats equality.
+        private static bool ConditionValueMatches(string? current, string? expected, string? dataType, TimeZoneInfo tz)
+        {
+            current ??= string.Empty;
+            expected ??= string.Empty;
+
+            if (string.Equals(current, expected, StringComparison.Ordinal))
+                return true;
+
+            if (dataType != DataTypes.Date && dataType != DataTypes.DateTime)
+                return false;
+
+            var currentInstant = DynamicDateTokens.ResolveValue(current, tz);
+            var expectedInstant = DynamicDateTokens.ResolveValue(expected, tz);
+            if (currentInstant is null || expectedInstant is null)
+                return false;
+
+            if (dataType == DataTypes.DateTime)
+                return currentInstant.Value == expectedInstant.Value;
+
+            return TimeZoneInfo.ConvertTimeFromUtc(currentInstant.Value, tz).Date
+                == TimeZoneInfo.ConvertTimeFromUtc(expectedInstant.Value, tz).Date;
         }
 
         private static EntriesWidgetConfigDto? TryParseEntriesConfig(string? config)

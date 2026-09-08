@@ -286,7 +286,7 @@ namespace Operum.Tests.Tests.Dashboards
                 ]
             }));
             var filterId = filter.GetProperty("id").GetString()!;
-            var queryId = await FilterQueryId(client, dashboardId, filterId);
+            var slotId = await FilterSlotId(client, dashboardId, filterId);
 
             // When that filter is set to "1", aim for 999 instead of the default 60.
             var update = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{goalId}", new UpdateDashboardItemDto
@@ -294,7 +294,7 @@ namespace Operum.Tests.Tests.Dashboards
                 Sources = [new UpdateDashboardItemSourceDto { SourceId = sourceId }],
                 GoalConditionalTargets =
                 [
-                    new GoalConditionalTargetDto { Conditions = new() { [queryId] = "1" }, Target = "999" }
+                    new GoalConditionalTargetDto { Conditions = new() { [slotId] = "1" }, Target = "999" }
                 ]
             });
             Assert.Equal(HttpStatusCode.OK, update.StatusCode);
@@ -304,13 +304,95 @@ namespace Operum.Tests.Tests.Dashboards
 
             // Filter set to the matching value: the conditional target wins.
             var narrowed = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "1" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "1" } });
             Assert.Equal("999", Analytic(ChartFor(await Data(narrowed), goalId)).GetProperty("target").GetString());
 
             // A different value: no row matches, back to the default.
             var other = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "2" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "2" } });
             Assert.Equal("60", Analytic(ChartFor(await Data(other), goalId)).GetProperty("target").GetString());
+        }
+
+        [Fact]
+        public async Task Goal_ConditionalTarget_OnADateClause_MatchesATokenAgainstTheConcreteDate()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("goalconditionaldate");
+
+            var tracker = await CreateCapableTracker(client, "Focus");
+            var dashboardId = await CreateDashboard(client);
+
+            var goalItem = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.Goal,
+                Code = AnalyticCodes.Sum,
+                GoalTarget = "60",
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields = [new CreateAnalyticFieldDto { FieldId = tracker.AmountFieldId, Purpose = AnalyticPurposes.Value }]
+                    }
+                ]
+            }));
+            var goalId = goalItem.GetProperty("id").GetString()!;
+            var sourceId = goalItem.GetProperty("sources")[0].GetProperty("id").GetString()!;
+
+            // A date filter on Day, followed by the goal. "on or before" keeps the seeded
+            // 2026-01-01 entry in scope for every value the test sets, so the goal always
+            // calculates and only its target changes.
+            var filter = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items/filter", new SaveFilterItemDto
+            {
+                Clauses =
+                [
+                    new ClauseDto
+                    {
+                        Kind = QueryKinds.Filter,
+                        DataType = DataTypes.Date,
+                        Operator = OperatorTypes.LessThanOrEqual
+                    }
+                ],
+                Links =
+                [
+                    new WidgetLinkDto
+                    {
+                        ItemId = goalId,
+                        TrackerId = tracker.Id,
+                        FieldByQuery = new() { ["0"] = tracker.DayFieldId }
+                    }
+                ]
+            }));
+            var filterId = filter.GetProperty("id").GetString()!;
+            var slotId = await FilterSlotId(client, dashboardId, filterId);
+
+            // The row is keyed on the "start of month" token.
+            var update = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{goalId}", new UpdateDashboardItemDto
+            {
+                Sources = [new UpdateDashboardItemSourceDto { SourceId = sourceId }],
+                GoalConditionalTargets =
+                [
+                    new GoalConditionalTargetDto
+                    {
+                        Conditions = new() { [slotId] = DynamicDateTokens.StartOfMonth },
+                        Target = "999"
+                    }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+
+            // Filter set to the concrete first-of-month date: the token still matches it.
+            var now = DateTime.UtcNow;
+            var firstOfMonth = new DateTime(now.Year, now.Month, 1).ToString("yyyy-MM-dd");
+            var onFirst = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [slotId] = firstOfMonth } });
+            Assert.Equal("999", Analytic(ChartFor(await Data(onFirst), goalId)).GetProperty("target").GetString());
+
+            // A different day: no row matches, back to the default.
+            var secondOfMonth = new DateTime(now.Year, now.Month, 2).ToString("yyyy-MM-dd");
+            var onSecond = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [slotId] = secondOfMonth } });
+            Assert.Equal("60", Analytic(ChartFor(await Data(onSecond), goalId)).GetProperty("target").GetString());
         }
 
         [Fact]
@@ -1854,15 +1936,18 @@ namespace Operum.Tests.Tests.Dashboards
             ]
         };
 
-        // The pooled query id the filter widget's first clause resolved to -- the key
-        // SetFilterValues expects, read back off the board.
-        private static async Task<string> FilterQueryId(HttpClient client, string dashboardId, string filterId)
+        // The slot id of the filter widget's first clause -- the key SetFilterValues and a
+        // goal's conditional targets expect, read back off the board.
+        private static Task<string> FilterSlotId(HttpClient client, string dashboardId, string filterId) =>
+            FilterSlotId(client, dashboardId, filterId, 0);
+
+        private static async Task<string> FilterSlotId(HttpClient client, string dashboardId, string filterId, int clauseIndex)
         {
             var widgets = await Widgets(client, dashboardId);
             foreach (var w in widgets.EnumerateArray())
                 if (w.GetProperty("id").GetString() == filterId)
-                    return w.GetProperty("filter").GetProperty("clauses")[0]
-                        .GetProperty("queryId").GetString()!;
+                    return w.GetProperty("filter").GetProperty("clauses")[clauseIndex]
+                        .GetProperty("slotId").GetString()!;
             throw new InvalidOperationException("filter widget not on the board");
         }
 
@@ -1892,20 +1977,20 @@ namespace Operum.Tests.Tests.Dashboards
                     ]
                 }));
             var filterId = item.GetProperty("id").GetString()!;
-            var queryId = await FilterQueryId(client, dashboardId, filterId);
+            var slotId = await FilterSlotId(client, dashboardId, filterId);
 
             // No value yet -- the clause is not applied, so the entry is still there.
             Assert.Equal(1, PointsOf(await Widgets(client, dashboardId), chartId));
 
             var narrowed = await client.PutAsJsonAsync(
                 $"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "10" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "10" } });
             Assert.Equal(HttpStatusCode.OK, narrowed.StatusCode);
             Assert.Equal(0, PointsOf(await Data(narrowed), chartId));
 
             var cleared = await client.PutAsJsonAsync(
                 $"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "" } });
             Assert.Equal(HttpStatusCode.OK, cleared.StatusCode);
             Assert.Equal(1, PointsOf(await Data(cleared), chartId));
         }
@@ -1931,11 +2016,11 @@ namespace Operum.Tests.Tests.Dashboards
                 $"dashboard/{dashboardId}/items/filter",
                 new SaveFilterItemDto { Clauses = AmountOverClauses(), Links = [LinkTo(chartId)] }));
             var filterId = item.GetProperty("id").GetString()!;
-            var queryId = await FilterQueryId(client, dashboardId, filterId);
+            var slotId = await FilterSlotId(client, dashboardId, filterId);
 
             var narrowed = await client.PutAsJsonAsync(
                 $"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "10" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "10" } });
             Assert.Equal(0, PointsOf(await Data(narrowed), chartId));
 
             // Edit the widget to also follow a second chart. The edit form sends clause
@@ -1984,11 +2069,11 @@ namespace Operum.Tests.Tests.Dashboards
                     ]
                 }));
             var filterId = item.GetProperty("id").GetString()!;
-            var queryId = await FilterQueryId(client, dashboardId, filterId);
+            var slotId = await FilterSlotId(client, dashboardId, filterId);
 
             await client.PutAsJsonAsync(
                 $"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "10" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "10" } });
 
             // Change the clause from "greater than" to "greater than or equal" -- a
             // different shape (a new pooled query id), so the old value ("Amount > 10",
@@ -2049,12 +2134,157 @@ namespace Operum.Tests.Tests.Dashboards
                     ]
                 }));
             var filterId = filterItem.GetProperty("id").GetString()!;
-            var queryId = await FilterQueryId(client, dashboardId, filterId);
+            var slotId = await FilterSlotId(client, dashboardId, filterId);
 
             var narrowed = await client.PutAsJsonAsync(
                 $"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "10" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "10" } });
             Assert.Equal(0, EntriesRowCount(await Data(narrowed), itemId));
+        }
+
+        [Fact]
+        public async Task Filter_TwoClausesOfTheSameShape_StayIndependentPerField()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("filtersameshape");
+
+            var tracker = await CreateCapableTracker(client, "Weight");
+            var scoreFieldId = (await Data(await client.PostAsJsonAsync($"trackers/{tracker.Id}/fields",
+                new CreateFieldDto { Name = "Score", Type = DataTypes.Number }))).GetProperty("id").GetString()!;
+            var dashboardId = await CreateDashboard(client);
+            var chartId = await PlaceLineChart(client, dashboardId, tracker);
+
+            // Two clauses of the very same shape -- "number on or below ?" -- mapped to two
+            // different fields of the followed chart's tracker.
+            var filter = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items/filter", new SaveFilterItemDto
+            {
+                Clauses =
+                [
+                    new ClauseDto { Kind = QueryKinds.Filter, DataType = DataTypes.Number, Operator = OperatorTypes.LessThanOrEqual },
+                    new ClauseDto { Kind = QueryKinds.Filter, DataType = DataTypes.Number, Operator = OperatorTypes.LessThanOrEqual }
+                ],
+                Links =
+                [
+                    new WidgetLinkDto
+                    {
+                        ItemId = chartId,
+                        TrackerId = tracker.Id,
+                        FieldByQuery = new() { ["0"] = tracker.AmountFieldId, ["1"] = scoreFieldId }
+                    }
+                ]
+            }));
+            var filterId = filter.GetProperty("id").GetString()!;
+
+            // Both clauses survive as their own input -- the second no longer collapses onto
+            // the first just because they pool to the same query.
+            var clauses = (await Widgets(client, dashboardId)).EnumerateArray()
+                .First(w => w.GetProperty("id").GetString() == filterId)
+                .GetProperty("filter").GetProperty("clauses");
+            Assert.Equal(2, clauses.GetArrayLength());
+            var amountSlot = clauses[0].GetProperty("slotId").GetString()!;
+            var scoreSlot = clauses[1].GetProperty("slotId").GetString()!;
+            Assert.NotEqual(amountSlot, scoreSlot);
+
+            // The seeded entry has Amount 5 and no Score. A ceiling on Score alone drops it...
+            var byScore = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [scoreSlot] = "100" } });
+            Assert.Equal(0, PointsOf(await Data(byScore), chartId));
+
+            // ...while the same ceiling on Amount alone keeps it, proving each clause runs
+            // against its own field.
+            var byAmount = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [amountSlot] = "100" } });
+            Assert.Equal(1, PointsOf(await Data(byAmount), chartId));
+        }
+
+        [Fact]
+        public async Task Goal_ConditionalTargets_KeyOffEachSameShapeClauseIndependently()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("goalsameshape");
+
+            var tracker = await CreateCapableTracker(client, "Focus");
+            var reviewedFieldId = (await Data(await client.PostAsJsonAsync($"trackers/{tracker.Id}/fields",
+                new CreateFieldDto { Name = "Reviewed", Type = DataTypes.Date }))).GetProperty("id").GetString()!;
+
+            // A second entry that has a Reviewed date, so a "Reviewed on or before" filter
+            // still leaves the goal something to sum rather than blanking it out.
+            var seedEntry = await client.PostAsJsonAsync($"trackers/{tracker.Id}/entries", new CreateEntryDto
+            {
+                FieldValues = new()
+                {
+                    ["Day"] = "2026-02-01",
+                    ["Amount"] = "10",
+                    ["Category"] = "Cardio",
+                    ["Reviewed"] = "2026-02-01"
+                }
+            });
+            Assert.Equal(HttpStatusCode.OK, seedEntry.StatusCode);
+
+            var dashboardId = await CreateDashboard(client);
+
+            var goalItem = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.Goal,
+                Code = AnalyticCodes.Sum,
+                GoalTarget = "60",
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields = [new CreateAnalyticFieldDto { FieldId = tracker.AmountFieldId, Purpose = AnalyticPurposes.Value }]
+                    }
+                ]
+            }));
+            var goalId = goalItem.GetProperty("id").GetString()!;
+            var sourceId = goalItem.GetProperty("sources")[0].GetProperty("id").GetString()!;
+
+            // "on or before ?" on Day, and the same shape again on Reviewed -- both followed
+            // by the goal.
+            var filter = await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items/filter", new SaveFilterItemDto
+            {
+                Clauses =
+                [
+                    new ClauseDto { Kind = QueryKinds.Filter, DataType = DataTypes.Date, Operator = OperatorTypes.LessThanOrEqual },
+                    new ClauseDto { Kind = QueryKinds.Filter, DataType = DataTypes.Date, Operator = OperatorTypes.LessThanOrEqual }
+                ],
+                Links =
+                [
+                    new WidgetLinkDto
+                    {
+                        ItemId = goalId,
+                        TrackerId = tracker.Id,
+                        FieldByQuery = new() { ["0"] = tracker.DayFieldId, ["1"] = reviewedFieldId }
+                    }
+                ]
+            }));
+            var filterId = filter.GetProperty("id").GetString()!;
+            var daySlot = await FilterSlotId(client, dashboardId, filterId, 0);
+            var reviewedSlot = await FilterSlotId(client, dashboardId, filterId, 1);
+            Assert.NotEqual(daySlot, reviewedSlot);
+
+            // One conditional row per clause, each keyed off its own slot.
+            var update = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{goalId}", new UpdateDashboardItemDto
+            {
+                Sources = [new UpdateDashboardItemSourceDto { SourceId = sourceId }],
+                GoalConditionalTargets =
+                [
+                    new GoalConditionalTargetDto { Conditions = new() { [daySlot] = "2026-03-01" }, Target = "111" },
+                    new GoalConditionalTargetDto { Conditions = new() { [reviewedSlot] = "2026-03-01" }, Target = "222" }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+
+            // Setting the Day clause hits the first row; the Reviewed clause is untouched.
+            var onDay = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [daySlot] = "2026-03-01" } });
+            Assert.Equal("111", Analytic(ChartFor(await Data(onDay), goalId)).GetProperty("target").GetString());
+
+            // Setting the Reviewed clause instead hits the second row.
+            var onReviewed = await client.PutAsJsonAsync($"dashboard/{dashboardId}/items/{filterId}/filter-values",
+                new SetFilterValuesDto { Values = new() { [reviewedSlot] = "2026-03-01" } });
+            Assert.Equal("222", Analytic(ChartFor(await Data(onReviewed), goalId)).GetProperty("target").GetString());
         }
 
         [Fact]
@@ -2158,11 +2388,11 @@ namespace Operum.Tests.Tests.Dashboards
                     ]
                 }));
             var filterId = item.GetProperty("id").GetString()!;
-            var queryId = await FilterQueryId(client, dashboardId, filterId);
+            var slotId = await FilterSlotId(client, dashboardId, filterId);
 
             var badValue = await client.PutAsJsonAsync(
                 $"dashboard/{dashboardId}/items/{filterId}/filter-values",
-                new SetFilterValuesDto { Values = new() { [queryId] = "not a number" } });
+                new SetFilterValuesDto { Values = new() { [slotId] = "not a number" } });
             Assert.Equal(HttpStatusCode.BadRequest, badValue.StatusCode);
 
             var badKey = await client.PutAsJsonAsync(

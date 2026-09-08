@@ -15,10 +15,19 @@ export const syntheticField = (key: string, type: string): FieldDto => ({
     isCalculated: false,
 });
 
-/** "Amount ≥", "Logged after" — the clause without a value, used as an input label. */
-export const clauseLabel = (dataType: string, operator?: string | null) => {
-    const type = fieldTypes.find((t) => t.value === dataType)?.label ?? dataType;
-    return `${type} ${operator ? formatOperator(operator) : ""}`.trim();
+/** "Amount ≥", "Logged after" — the clause without a value, used as an input label. Pass
+    `nameOverride` to lead with a field name instead of the data type, so two same-shape
+    clauses on different fields read apart ("Due date ≤" vs "Closed date ≤"). */
+export const clauseLabel = (
+    dataType: string,
+    operator?: string | null,
+    nameOverride?: string,
+) => {
+    const lead =
+        nameOverride ??
+        fieldTypes.find((t) => t.value === dataType)?.label ??
+        dataType;
+    return `${lead} ${operator ? formatOperator(operator) : ""}`.trim();
 };
 
 /** The string form the backend stores a clause value in. */

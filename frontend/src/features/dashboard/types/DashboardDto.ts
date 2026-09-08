@@ -99,10 +99,10 @@ export interface ClauseDto {
     descending?: boolean;
 }
 
-/** Names one followed Analytic/Entries widget + tracker a filter widget narrows, and
-    which of that tracker's fields each clause runs against, keyed by the clause's pooled
-    query id. Shared by both of a filter widget's independent link lists -- `links` (its
-    own typed clauses) and `presetLinks` (whichever preset is selected). */
+/** Names one followed Analytic/Entries widget + tracker a filter widget narrows, and which
+    of that tracker's fields each clause runs against. `fieldByQuery` is keyed by clause: on
+    the wire (`SaveFilterItemDto`) by the clause's index, and in the stored
+    `FilterWidgetConfig` by the clause's `slotId`. */
 export interface WidgetLink {
     itemId: string;
     trackerId: string;
@@ -148,41 +148,83 @@ export interface FilterPresetOptionDto {
     values: (string | null)[];
 }
 
-/** The Config payload of a WidgetTypes.Filter widget: an ordered filter clause set (pooled
-    query ids), the current value per clause (keyed by the pooled query id), the followed
-    widgets in `links`, and `presetIds` -- the board's DashboardViews it offers as presets,
-    each a named value set whose clause shape matches these clauses exactly. */
+/** One clause of a filter widget: a stable widget-local id and the pooled query it
+    currently resolves to. Two slots may share a `queryId` (two same-shape clauses mapped to
+    different fields). */
+export interface FilterClauseSlot {
+    slotId: string;
+    queryId: string;
+}
+
+/** The Config payload of a WidgetTypes.Filter widget: an ordered clause set (`slots`), the
+    current value per clause (keyed by `slotId`), the followed widgets in `links`, and
+    `presetIds` -- the board's DashboardViews it offers as presets, each a named value set
+    whose clause shape matches these clauses exactly. */
 export interface FilterWidgetConfig {
-    queryIds: string[];
-    valueByQuery: Record<string, string | null>;
+    slots: FilterClauseSlot[];
+    valueBySlot: Record<string, string | null>;
     links: WidgetLink[];
     presetIds: string[];
 }
 
 /** Config is free-form JSON per widget type, same caveat as parseTextWidgetConfig. Shared
     by the filter widget's own edit dialog and anything that appends a follower link to it
-    without going through that dialog. */
+    without going through that dialog. Pre-slot configs stored a parallel `queryIds` list
+    with `valueByQuery` / `fieldByQuery` keyed by pooled query id; those are folded into
+    slots here (mirroring the backend), a clause with a unique shape keeping its query id as
+    its slot id. */
 export function parseFilterWidgetConfig(config: string | undefined): FilterWidgetConfig | null {
     if (!config) return null;
     try {
         const parsed = JSON.parse(config);
-        return Array.isArray(parsed?.queryIds)
-            ? {
-                  queryIds: parsed.queryIds,
-                  valueByQuery: parsed.valueByQuery ?? {},
-                  links: parsed.links ?? [],
-                  presetIds: parsed.presetIds ?? [],
-              }
-            : null;
+
+        if (Array.isArray(parsed?.slots)) {
+            return {
+                slots: parsed.slots,
+                valueBySlot: parsed.valueBySlot ?? {},
+                links: parsed.links ?? [],
+                presetIds: parsed.presetIds ?? [],
+            };
+        }
+
+        if (!Array.isArray(parsed?.queryIds)) return null;
+
+        const queryIds: string[] = parsed.queryIds;
+        const duplicated = new Set(
+            queryIds.filter((id, i) => queryIds.indexOf(id) !== i),
+        );
+        const slots: FilterClauseSlot[] = queryIds.map((queryId, i) => ({
+            slotId: duplicated.has(queryId) ? `${queryId}~${i}` : queryId,
+            queryId,
+        }));
+        const slotByQuery = new Map<string, string>();
+        for (const s of slots) if (!slotByQuery.has(s.queryId)) slotByQuery.set(s.queryId, s.slotId);
+        const remap = (map: Record<string, string> | undefined) =>
+            Object.fromEntries(
+                Object.entries(map ?? {})
+                    .filter(([q]) => slotByQuery.has(q))
+                    .map(([q, v]) => [slotByQuery.get(q)!, v]),
+            );
+
+        return {
+            slots,
+            valueBySlot: remap(parsed.valueByQuery),
+            links: (parsed.links ?? []).map((l: WidgetLink) => ({
+                itemId: l.itemId,
+                trackerId: l.trackerId,
+                fieldByQuery: remap(l.fieldByQuery),
+            })),
+            presetIds: parsed.presetIds ?? [],
+        };
     } catch {
         return null;
     }
 }
 
 /** One clause of a filter widget's own typed clause set, resolved server-side for the
-    card to render an input for. queryId keys the widget's valueByQuery map. */
+    card to render an input for. slotId keys the widget's valueBySlot map. */
 export interface FilterClauseDto {
-    queryId: string;
+    slotId: string;
     kind: string;
     dataType: string;
     operator?: string | null;
@@ -199,18 +241,19 @@ export interface FilterWidgetDto {
 
 /** Adds or edits a WidgetTypes.Filter item. `clauses` are all filters, never sorts, and are
     required; each carries the value it starts out filtering on. A `links` entry's
-    fieldByQuery is keyed by the clause's index in `clauses` — the client has no pooled query
-    id until the save resolves one — and the backend rewrites those keys to the ids it
-    stores. `presetIds` names the board's DashboardViews this widget offers as presets; each
-    must be a view whose filter-clause shape matches `clauses` exactly. */
+    fieldByQuery is keyed by the clause's index in `clauses` — the client has no stable
+    clause id until the save resolves one — and the backend rewrites those keys to the
+    per-clause slot ids it stores. `presetIds` names the board's DashboardViews this widget
+    offers as presets; each must be a view whose filter-clause shape matches `clauses`
+    exactly. */
 export interface SaveFilterItemDto {
     clauses: ClauseDto[];
     links: WidgetLink[];
     presetIds: string[];
 }
 
-/** Changes the values a WidgetTypes.Filter item's own typed clauses are currently set
-    to. */
+/** Changes the values a WidgetTypes.Filter item's own typed clauses are currently set to,
+    keyed by each clause's slotId. */
 export interface SetFilterValuesDto {
     values: Record<string, string | null>;
 }

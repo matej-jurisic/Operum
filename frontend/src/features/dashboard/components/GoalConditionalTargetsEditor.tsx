@@ -12,11 +12,13 @@ import {
 } from "./filterClauseInput";
 
 /** A filter clause this goal placement follows, offered as something a conditional target
-    can key off. */
+    can key off. `fieldName` is the field this clause runs against for this goal widget,
+    shown so two same-shape clauses read apart. */
 export interface ConnectedClause {
-    queryId: string;
+    slotId: string;
     dataType: string;
     operator?: string | null;
+    fieldName?: string;
 }
 
 interface Props {
@@ -56,8 +58,8 @@ export function GoalConditionalTargetsEditor({ clauses, value, onChange }: Props
             .map((row) => {
                 const conditions: Record<string, string> = {};
                 for (const clause of clauses) {
-                    const normalized = normalizeClauseValue(row.values[clause.queryId]);
-                    if (normalized !== null) conditions[clause.queryId] = normalized;
+                    const normalized = normalizeClauseValue(row.values[clause.slotId]);
+                    if (normalized !== null) conditions[clause.slotId] = normalized;
                 }
                 return { conditions, target: row.target.trim() };
             })
@@ -98,14 +100,18 @@ export function GoalConditionalTargetsEditor({ clauses, value, onChange }: Props
                         </Group>
 
                         {clauses.map((clause) => (
-                            <Stack key={clause.queryId} gap={2}>
+                            <Stack key={clause.slotId} gap={2}>
                                 <Text size="xs" fw={500} c="dimmed">
-                                    {clauseLabel(clause.dataType, clause.operator)}
+                                    {clauseLabel(
+                                        clause.dataType,
+                                        clause.operator,
+                                        clause.fieldName,
+                                    )}
                                 </Text>
                                 <DynamicDateValueInput
                                     isDateType={DATE_TYPES.includes(clause.dataType)}
                                     value={
-                                        row.values[clause.queryId] as
+                                        row.values[clause.slotId] as
                                             | string
                                             | number
                                             | Date
@@ -113,13 +119,13 @@ export function GoalConditionalTargetsEditor({ clauses, value, onChange }: Props
                                     }
                                     onChange={(v) =>
                                         form.setFieldValue(
-                                            `rows.${index}.values.${clause.queryId}`,
+                                            `rows.${index}.values.${clause.slotId}`,
                                             v,
                                         )
                                     }
-                                    field={syntheticField(clause.queryId, clause.dataType)}
+                                    field={syntheticField(clause.slotId, clause.dataType)}
                                     form={form}
-                                    fieldPath={`rows.${index}.values.${clause.queryId}`}
+                                    fieldPath={`rows.${index}.values.${clause.slotId}`}
                                 />
                             </Stack>
                         ))}

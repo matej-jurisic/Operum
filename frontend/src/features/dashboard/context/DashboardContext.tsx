@@ -7,7 +7,7 @@ import React, {
 import { dashboardController } from "../api/dashboardController";
 import {
     FilterFollowLinks,
-    filterWidgetIndexByQueryId,
+    filterWidgetIndexBySlotId,
     filterWidgetToSaveDto,
     toFollowerLink,
 } from "../components/filterLinkUtils";
@@ -100,24 +100,24 @@ export const DashboardProvider: React.FC<{
     const applyFilterFollows = async (itemId: string, sources: FilterFollowLinks[]) => {
         const byFilter = new Map<
             string,
-            { trackerId: string; fieldByQueryId: Record<string, string> }[]
+            { trackerId: string; fieldBySlotId: Record<string, string> }[]
         >();
         for (const { trackerId, links } of sources) {
-            for (const [filterItemId, fieldByQueryId] of Object.entries(links)) {
-                if (Object.keys(fieldByQueryId).length === 0) continue;
+            for (const [filterItemId, fieldBySlotId] of Object.entries(links)) {
+                if (Object.keys(fieldBySlotId).length === 0) continue;
                 const list = byFilter.get(filterItemId) ?? [];
-                list.push({ trackerId, fieldByQueryId });
+                list.push({ trackerId, fieldBySlotId });
                 byFilter.set(filterItemId, list);
             }
         }
         for (const [filterItemId, followers] of byFilter) {
             const widget = widgets.find((w) => w.id === filterItemId);
             if (!widget) continue;
-            const indexByQueryId = filterWidgetIndexByQueryId(widget);
+            const indexBySlotId = filterWidgetIndexBySlotId(widget);
             const dto = filterWidgetToSaveDto(widget);
             dto.links = [
                 ...dto.links,
-                ...followers.map((f) => toFollowerLink(indexByQueryId, { itemId, ...f })),
+                ...followers.map((f) => toFollowerLink(indexBySlotId, { itemId, ...f })),
             ];
             await dashboardController.updateFilterItem(dashboardId, filterItemId, dto);
         }

@@ -8,6 +8,7 @@ import {
     TextInput,
 } from "@mantine/core";
 import { useEffect, useMemo, useState } from "react";
+import { fieldsController } from "../../fields/api/fieldsController";
 import { viewsController } from "../../views/api/viewsController";
 import { ViewDto } from "../../views/types/ViewDto";
 import { dashboardController } from "../api/dashboardController";
@@ -64,11 +65,12 @@ export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
     const [conditionalTargets, setConditionalTargets] = useState<
         GoalConditionalTargetDto[]
     >([]);
+    const [fieldNameById, setFieldNameById] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // The filter clauses this placement follows -- the only clauses a conditional target is
     // allowed to key off. Read from the board's filter widgets, whose config links name the
-    // widgets that follow them.
+    // widgets that follow them and the field each clause runs against here.
     const connectedClauses = useMemo<ConnectedClause[]>(() => {
         const out: ConnectedClause[] = [];
         const seen = new Set<string>();
@@ -76,24 +78,24 @@ export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
             if (w.type !== WidgetTypes.Filter || !w.filter) continue;
             const config = parseFilterWidgetConfig(w.config);
             if (!config) continue;
-            const followed = new Set(
-                config.links
-                    .filter((l) => l.itemId === itemId)
-                    .flatMap((l) => Object.keys(l.fieldByQuery)),
-            );
+            const fieldBySlot: Record<string, string> = {};
+            for (const l of config.links)
+                if (l.itemId === itemId)
+                    Object.assign(fieldBySlot, l.fieldByQuery);
             for (const clause of w.filter.clauses) {
-                if (followed.has(clause.queryId) && !seen.has(clause.queryId)) {
-                    seen.add(clause.queryId);
+                if (fieldBySlot[clause.slotId] && !seen.has(clause.slotId)) {
+                    seen.add(clause.slotId);
                     out.push({
-                        queryId: clause.queryId,
+                        slotId: clause.slotId,
                         dataType: clause.dataType,
                         operator: clause.operator,
+                        fieldName: fieldNameById[fieldBySlot[clause.slotId]],
                     });
                 }
             }
         }
         return out;
-    }, [widgets, itemId]);
+    }, [widgets, itemId, fieldNameById]);
 
     // The board's render endpoint carries the calculated charts, not the definitions
     // behind them, so the sources being edited are read from the dashboard itself.
@@ -110,15 +112,23 @@ export function EditWidgetModal({ itemId, color, onClose, onSave }: Props) {
             const sources = [...item.sources].sort((a, b) => a.order - b.order);
             const viewsByTracker = new Map<string, ViewDto[]>();
 
+            const fieldNames: Record<string, string> = {};
+
             await Promise.all(
                 [...new Set(sources.map((s) => s.trackerId))].map(
                     async (trackerId) => {
-                        const views =
-                            await viewsController.getViewList(trackerId);
+                        const [views, fields] = await Promise.all([
+                            viewsController.getViewList(trackerId),
+                            fieldsController.getFields(trackerId),
+                        ]);
                         viewsByTracker.set(trackerId, views.data ?? []);
+                        for (const f of fields.data ?? [])
+                            fieldNames[f.id] = f.name;
                     },
                 ),
             );
+
+            setFieldNameById(fieldNames);
 
             setRows(
                 sources.map((source) => ({

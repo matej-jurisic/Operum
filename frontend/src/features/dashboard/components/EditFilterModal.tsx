@@ -26,10 +26,10 @@ export function EditFilterModal({ itemId, color, onClose, onSave }: Props) {
     const config = isFilter ? parseFilterWidgetConfig(widget.config) : null;
     const clauseDtos = (isFilter && widget.filter?.clauses) || [];
 
-    // The form works in clause indices; the stored links are keyed by pooled query id, so
+    // The form works in clause indices; the stored links are keyed by clause slot id, so
     // translate them back through the clause order the widget reports.
-    const indexByQueryId = new Map<string, string>(
-        clauseDtos.map((c, i) => [c.queryId, String(i)]),
+    const indexBySlotId = new Map<string, string>(
+        clauseDtos.map((c, i) => [c.slotId, String(i)]),
     );
 
     const clauses: AbstractClauseRow[] = clauseDtos.map((c) => ({
@@ -44,9 +44,9 @@ export function EditFilterModal({ itemId, color, onClose, onSave }: Props) {
         itemId: l.itemId,
         trackerId: l.trackerId,
         fieldByQuery: Object.fromEntries(
-            Object.entries(l.fieldByQuery).flatMap(([queryId, fieldId]) => {
-                const index = indexByQueryId.get(queryId);
-                return index ? [[index, fieldId]] : [];
+            Object.entries(l.fieldByQuery).flatMap(([slotId, fieldId]) => {
+                const index = indexBySlotId.get(slotId);
+                return index !== undefined ? [[index, fieldId]] : [];
             }),
         ),
     }));

@@ -18,7 +18,7 @@ namespace Operum.Model.Constants
 
         // A board filter widget with two independent facets, both narrowing whichever
         // Analytic/Entries widgets it's linked to. First, it owns a set of filter clauses
-        // with a value typed directly on the board (its own QueryIds/ValueByQuery/Links).
+        // with a value typed directly on the board (its own Slots/ValueBySlot/Links).
         // Second, it can offer a dropdown of the board's DashboardViews as quick-apply
         // presets (PresetIds/SelectedPresetId/PresetLinks) — picking one applies that view's
         // whole clause set (filters AND sorts) to its followers, same as the old standalone

@@ -11,7 +11,10 @@ import {
     resolveDynamicDateToken,
     serializeAnchorToken,
 } from "../constants/dynamicDateTokens";
-import { formatDateTimeFromDate } from "../utils/formatters/TypeFormatter";
+import {
+    formatDateOnlyFromDate,
+    formatDateTimeFromDate,
+} from "../utils/formatters/TypeFormatter";
 
 interface Props {
     isDateType: boolean;
@@ -142,7 +145,10 @@ export default function DynamicDateValueInput({
 
             {preview && (
                 <Text size="xs" c="dimmed">
-                    Right now: {formatDateTimeFromDate(preview)}
+                    Right now:{" "}
+                    {isDateOnly
+                        ? formatDateOnlyFromDate(preview)
+                        : formatDateTimeFromDate(preview)}
                 </Text>
             )}
         </Stack>
