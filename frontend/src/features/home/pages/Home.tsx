@@ -44,6 +44,7 @@ import {
     TbHeading,
     TbLayoutDashboard,
     TbLayoutGrid,
+    TbLink,
     TbMessage,
     TbMicroscope,
     TbMovie,
@@ -241,6 +242,12 @@ const DATA_TYPES = [
         color: "indigo",
         label: "TimeSpan",
         description: "Duration values for tracking time spent.",
+    },
+    {
+        icon: <TbLink size={20} />,
+        color: "grape",
+        label: "Reference",
+        description: "Link an entry to an entry in another tracker.",
     },
 ];
 
