@@ -20,6 +20,7 @@ import {
     DashboardItemDto,
     DashboardLayoutItemDto,
     DashboardWidgetDto,
+    GoalConditionalTargetDto,
     LayoutVariant,
     LayoutVariants,
     PlaceEntriesWidgetDto,
@@ -38,14 +39,17 @@ type DashboardContextType = {
     refreshWidgets: () => Promise<void>;
     /** followFilters carries which of the board's existing filter widgets to link the new
         widget's tracker(s) to, one entry per source, applied in the same step so it never
-        loads unfiltered first. See FilterFollowChecklist. */
+        loads unfiltered first. See FilterFollowChecklist. goalConditionalTargets (goal
+        widgets only) is saved right after, once those follow links exist for it to key off. */
     createAndPlaceWidget: (
         dto: CreateAndPlaceWidgetDto,
         followFilters?: FilterFollowLinks[],
+        goalConditionalTargets?: GoalConditionalTargetDto[],
     ) => Promise<DashboardItemDto | undefined>;
     placeWidget: (
         dto: PlaceWidgetDto,
         followFilters?: FilterFollowLinks[],
+        goalConditionalTargets?: GoalConditionalTargetDto[],
     ) => Promise<DashboardItemDto | undefined>;
     addQuickAddItem: (dto: AddDashboardQuickAddItemDto) => Promise<void>;
     addFilterItem: (dto: SaveFilterItemDto) => Promise<void>;
@@ -123,22 +127,53 @@ export const DashboardProvider: React.FC<{
         }
     };
 
+    // A goal placement's conditional targets are validated against the filter clauses it
+    // follows, so they can only be saved once those follow links exist. Both add paths apply
+    // the links first, then send the targets through the normal item-update endpoint.
+    const saveGoalConditionalTargets = async (
+        item: DashboardItemDto,
+        goalConditionalTargets: GoalConditionalTargetDto[],
+    ) => {
+        await dashboardController.updateDashboardItem(dashboardId, item.id, {
+            displayMode: item.layout.displayMode,
+            mobileDisplayMode: item.mobileLayout.displayMode,
+            yAxisFromZero: item.yAxisFromZero,
+            goalConditionalTargets,
+            sources: item.sources.map((s) => ({
+                sourceId: s.id,
+                label: s.label ?? null,
+                viewId: s.viewId ?? null,
+            })),
+        });
+    };
+
     const createAndPlaceWidget = async (
         dto: CreateAndPlaceWidgetDto,
         followFilters?: FilterFollowLinks[],
+        goalConditionalTargets?: GoalConditionalTargetDto[],
     ) => {
         const res = await dashboardController.createAndPlaceWidget(dashboardId, dto);
         if (res.data && followFilters?.length) {
             await applyFilterFollows(res.data.id, followFilters);
         }
+        if (res.data && goalConditionalTargets?.length) {
+            await saveGoalConditionalTargets(res.data, goalConditionalTargets);
+        }
         await refreshWidgets();
         return res.data;
     };
 
-    const placeWidget = async (dto: PlaceWidgetDto, followFilters?: FilterFollowLinks[]) => {
+    const placeWidget = async (
+        dto: PlaceWidgetDto,
+        followFilters?: FilterFollowLinks[],
+        goalConditionalTargets?: GoalConditionalTargetDto[],
+    ) => {
         const res = await dashboardController.placeWidget(dashboardId, dto);
         if (res.data && followFilters?.length) {
             await applyFilterFollows(res.data.id, followFilters);
+        }
+        if (res.data && goalConditionalTargets?.length) {
+            await saveGoalConditionalTargets(res.data, goalConditionalTargets);
         }
         await refreshWidgets();
         return res.data;

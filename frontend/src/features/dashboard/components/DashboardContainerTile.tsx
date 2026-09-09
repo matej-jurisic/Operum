@@ -56,10 +56,11 @@ export function DashboardContainerTile({
   const name = parseTextWidgetConfig(widget.config)?.text.trim() || "";
   const hasName = name.length > 0;
   // A named container keeps its header in the layout at all times. A nameless one has no
-  // header when the board is at rest and grows one, in the layout, while arranging. It
-  // stays in flow rather than floating over the sub-grid so it never sits on top of the
-  // widgets in it and makes them harder to grab.
+  // header at rest and grows one only while arranging: that one floats as a compact bar in
+  // the corner rather than sitting in flow, so toggling arrange mode never resizes the
+  // sub-grid and reflows the widgets in it right when they are being arranged.
   const showHeader = hasName || isConfiguring;
+  const floatingHeader = isConfiguring && !hasName;
 
   return (
     <Paper
@@ -69,7 +70,11 @@ export function DashboardContainerTile({
       data-editing={isConfiguring || undefined}
     >
       {showHeader && (
-        <div ref={handleRef} className="dashboard-container-header">
+        <div
+          ref={handleRef}
+          className="dashboard-container-header"
+          data-floating={floatingHeader || undefined}
+        >
           {isConfiguring && (
             <MdDragIndicator
               size={16}

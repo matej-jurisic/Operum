@@ -43,10 +43,12 @@ export const DRAG_CANCEL_SELECTOR =
 // widget dragged in from the board at a fraction of its height on the board.
 export const CONTAINER_MARGIN: [number, number] = [16, 16];
 
-// The inset between a container's frame and its sub-grid. Applied as the grid's own
+// The inset between a container's frame and its sub-grid. Matches CONTAINER_MARGIN and the
+// board's own margin so the gap around a widget is the same whether its neighbour is
+// another widget, the container wall, or the board edge. Applied as the grid's own
 // padding, not CSS padding on the body, so the width the grid is measured at is the
 // width it renders into (a padded measured element leaves the grid overflowing it).
-export const CONTAINER_PADDING: [number, number] = [8, 8];
+export const CONTAINER_PADDING: [number, number] = [16, 16];
 
 /** The key a grid's pending layout is stashed under while a save is being assembled: a
     container's id, or this for the board itself. */

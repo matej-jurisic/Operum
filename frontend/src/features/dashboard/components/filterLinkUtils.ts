@@ -17,7 +17,12 @@ import { clauseLabel } from "./filterClauseInput";
 export interface FilterCandidate {
     itemId: string;
     label: string;
-    queries: { slotId: string; dataType: string; describe: string }[];
+    queries: {
+        slotId: string;
+        dataType: string;
+        operator?: string | null;
+        describe: string;
+    }[];
 }
 
 /** The board's filter widgets a new widget's tracker(s) could follow, one entry per Filter
@@ -39,10 +44,51 @@ export function filterCandidatesFor(widgets: DashboardWidgetDto[]): FilterCandid
             queries: clauses.map((c) => ({
                 slotId: c.slotId,
                 dataType: c.dataType,
+                operator: c.operator,
                 describe: clauseLabel(c.dataType, c.operator),
             })),
         };
     });
+}
+
+/** A filter clause a goal placement follows, offered as something a conditional target can
+    key off. `fieldName` is the field this clause runs against for this goal widget, shown so
+    two same-shape clauses read apart. */
+export interface ConnectedClause {
+    slotId: string;
+    dataType: string;
+    operator?: string | null;
+    fieldName?: string;
+}
+
+/** The connected-clause list GoalConditionalTargetsEditor needs, built from the "follow
+    filters" selection a creation form is still holding in memory rather than from saved
+    filter configs. Mirrors what EditWidgetModal derives once those links are persisted.
+    `linksByFilter` maps a board filter widget's id to that filter's clause slot id -> the
+    field id picked for it; `fieldNameById` names those fields. */
+export function connectedClausesFromLinks(
+    linksByFilter: Record<string, Record<string, string>>,
+    filters: FilterCandidate[],
+    fieldNameById: Record<string, string>,
+): ConnectedClause[] {
+    const out: ConnectedClause[] = [];
+    const seen = new Set<string>();
+    for (const [filterItemId, fieldBySlot] of Object.entries(linksByFilter)) {
+        const filter = filters.find((f) => f.itemId === filterItemId);
+        if (!filter) continue;
+        for (const q of filter.queries) {
+            const fieldId = fieldBySlot[q.slotId];
+            if (!fieldId || seen.has(q.slotId)) continue;
+            seen.add(q.slotId);
+            out.push({
+                slotId: q.slotId,
+                dataType: q.dataType,
+                operator: q.operator,
+                fieldName: fieldNameById[fieldId],
+            });
+        }
+    }
+    return out;
 }
 
 /** One new widget's tracker source and which of the board's filter widgets it should

@@ -24,10 +24,8 @@ import {
 import { WidgetDisplayModeFields } from "./WidgetDisplayModeFields";
 import { SourceViewSelect } from "./SourceViewSelect";
 import { YAxisScaleOption } from "./YAxisScaleOption";
-import {
-    ConnectedClause,
-    GoalConditionalTargetsEditor,
-} from "./GoalConditionalTargetsEditor";
+import { ConnectedClause } from "./filterLinkUtils";
+import { GoalConditionalTargetsEditor } from "./GoalConditionalTargetsEditor";
 import { AnalyticResultTypeEnum } from "../../analytics/enums/AnalyticResultTypeEnum";
 
 interface Props {

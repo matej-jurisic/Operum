@@ -10,16 +10,7 @@ import {
     normalizeClauseValue,
     syntheticField,
 } from "./filterClauseInput";
-
-/** A filter clause this goal placement follows, offered as something a conditional target
-    can key off. `fieldName` is the field this clause runs against for this goal widget,
-    shown so two same-shape clauses read apart. */
-export interface ConnectedClause {
-    slotId: string;
-    dataType: string;
-    operator?: string | null;
-    fieldName?: string;
-}
+import { ConnectedClause } from "./filterLinkUtils";
 
 interface Props {
     clauses: ConnectedClause[];

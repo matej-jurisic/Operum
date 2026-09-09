@@ -12,7 +12,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 8px;
+    /* Horizontal inset matches the sub-grid's containerPadding (CONTAINER_PADDING) so the
+       title lines up with the first column of widgets below it. */
+    padding: 6px 16px;
     /* Holds the row at the height its arrange-mode icon buttons (ActionIcon size "md",
        1.75rem) need, so it doesn't grow and shrink as arrange mode is toggled. The row is
        border-box, so the 12px of vertical padding and the 1px bottom border are both part
@@ -26,6 +28,24 @@
 .dashboard-container[data-editing] .dashboard-container-header {
     cursor: grab;
     touch-action: none;
+}
+
+/* A nameless container's arrange-mode header: floated as a compact bar over the top-left
+   of the sub-grid so it takes no flow space. The body keeps its resting size, so entering
+   arrange mode never squeezes the sub-grid and reflows the widgets being arranged. */
+.dashboard-container-header[data-floating] {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 2;
+    min-height: 0;
+    width: auto;
+    max-width: calc(100% - 8px);
+    padding: 4px 6px;
+    border: 1px solid var(--mantine-color-default-border);
+    border-radius: var(--mantine-radius-sm);
+    box-shadow: var(--mantine-shadow-sm);
+    background: var(--mantine-color-body);
 }
 
 .dashboard-container-grip {

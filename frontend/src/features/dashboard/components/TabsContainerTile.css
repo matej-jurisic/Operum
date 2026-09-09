@@ -12,7 +12,9 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 8px;
+    /* Horizontal inset matches the sub-grid's containerPadding (CONTAINER_PADDING) so the
+       title lines up with the first column of widgets below it. */
+    padding: 6px 16px;
     /* Same reasoning as the plain container header: hold the row at the height its
        arrange-mode icon buttons need so it doesn't jump as arrange mode toggles. */
     min-height: calc(1.75rem * var(--mantine-scale) + 12px + 1px);

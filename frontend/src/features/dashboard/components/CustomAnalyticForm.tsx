@@ -35,10 +35,13 @@ import { useDashboard } from "../context/DashboardContext";
 import {
     CreateAndPlaceWidgetDto,
     DashboardItemDisplayMode,
+    GoalConditionalTargetDto,
 } from "../types/DashboardDto";
 import { FilterFollowChecklist } from "./FilterFollowChecklist";
+import { GoalConditionalTargetsEditor } from "./GoalConditionalTargetsEditor";
 import {
     FilterFollowLinks,
+    connectedClausesFromLinks,
     filterCandidatesFor,
     followLinksComplete,
 } from "./filterLinkUtils";
@@ -49,7 +52,11 @@ import { YAxisScaleOption } from "./YAxisScaleOption";
 interface Props {
     /** Steps back to the widget type picker. */
     onBack: () => void;
-    onAdd: (dto: CreateAndPlaceWidgetDto, followFilters?: FilterFollowLinks[]) => Promise<void>;
+    onAdd: (
+        dto: CreateAndPlaceWidgetDto,
+        followFilters?: FilterFollowLinks[],
+        goalConditionalTargets?: GoalConditionalTargetDto[],
+    ) => Promise<void>;
 }
 
 // One tracker's contribution to the item. The chart type and calculation are picked once
@@ -115,6 +122,11 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
     const [yAxisFromZero, setYAxisFromZero] = useState(true);
     // Goal widgets only: the target the value is shown as progress toward.
     const [goalTarget, setGoalTarget] = useState("");
+    // Goal widgets only: per-row targets that override the default when a followed filter
+    // currently holds a given value.
+    const [conditionalTargets, setConditionalTargets] = useState<
+        GoalConditionalTargetDto[]
+    >([]);
     const [displayMode, setDisplayMode] = useState(DashboardItemDisplayMode.Full);
     const [mobileDisplayMode, setMobileDisplayMode] = useState(
         DashboardItemDisplayMode.Full,
@@ -176,7 +188,24 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
     // either invalidates whatever was typed.
     useEffect(() => {
         setGoalTarget("");
+        setConditionalTargets([]);
     }, [resultType, code, goalValueField?.type]);
+
+    // A goal has exactly one tracker row (goals aren't combinable), so its conditional
+    // targets key off that row's followed filter clauses.
+    const goalConnectedClauses = useMemo(
+        () =>
+            isGoal
+                ? connectedClausesFromLinks(
+                      rows[0]?.filterLinks ?? {},
+                      filterCandidates,
+                      Object.fromEntries(
+                          (rows[0]?.fields ?? []).map((f) => [f.id, f.name]),
+                      ),
+                  )
+                : [],
+        [isGoal, rows, filterCandidates],
+    );
 
     const updateRow = (index: number, patch: Partial<TrackerRow>) => {
         setRows((prev) =>
@@ -312,6 +341,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                 })),
             },
             rows.map((row) => ({ trackerId: row.trackerId!, links: row.filterLinks })),
+            isGoal && goalConnectedClauses.length > 0 ? conditionalTargets : undefined,
         );
         setIsSubmitting(false);
     };
@@ -465,6 +495,14 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                         }
                     />
                 ))}
+
+            {isGoal && goalValueField && goalConnectedClauses.length > 0 && (
+                <GoalConditionalTargetsEditor
+                    clauses={goalConnectedClauses}
+                    value={conditionalTargets}
+                    onChange={setConditionalTargets}
+                />
+            )}
 
             {rows.length > 1 && xAxisPurpose && (
                 <Checkbox

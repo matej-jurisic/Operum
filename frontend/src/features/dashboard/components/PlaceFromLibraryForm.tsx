@@ -11,15 +11,18 @@ import { useWidgets } from "../../widgets/context/WidgetsContext";
 import { useDashboard } from "../context/DashboardContext";
 import {
     DashboardItemDisplayMode,
+    GoalConditionalTargetDto,
     PlaceEntriesWidgetDto,
     PlaceWidgetDto,
 } from "../types/DashboardDto";
 import { FilterFollowChecklist } from "./FilterFollowChecklist";
 import {
     FilterFollowLinks,
+    connectedClausesFromLinks,
     filterCandidatesFor,
     followLinksComplete,
 } from "./filterLinkUtils";
+import { GoalConditionalTargetsEditor } from "./GoalConditionalTargetsEditor";
 import { WidgetDisplayModeFields } from "./WidgetDisplayModeFields";
 import { SourceViewSelect, ViewSelection } from "./SourceViewSelect";
 import { YAxisScaleOption } from "./YAxisScaleOption";
@@ -28,7 +31,11 @@ import { AnalyticResultTypeEnum } from "../../analytics/enums/AnalyticResultType
 interface Props {
     /** Steps back to the widget type picker. */
     onBack: () => void;
-    onPlaceWidget: (dto: PlaceWidgetDto, followFilters?: FilterFollowLinks[]) => Promise<void>;
+    onPlaceWidget: (
+        dto: PlaceWidgetDto,
+        followFilters?: FilterFollowLinks[],
+        goalConditionalTargets?: GoalConditionalTargetDto[],
+    ) => Promise<void>;
     onPlaceEntriesWidget: (
         dto: PlaceEntriesWidgetDto,
         followFilters?: FilterFollowLinks,
@@ -82,6 +89,9 @@ export function PlaceFromLibraryForm({
     const [entriesFilterLinks, setEntriesFilterLinks] = useState<
         Record<string, Record<string, string>>
     >({});
+    const [conditionalTargets, setConditionalTargets] = useState<
+        GoalConditionalTargetDto[]
+    >([]);
     const [displayMode, setDisplayMode] = useState(DashboardItemDisplayMode.Full);
     const [mobileDisplayMode, setMobileDisplayMode] = useState(
         DashboardItemDisplayMode.Full,
@@ -145,11 +155,30 @@ export function PlaceFromLibraryForm({
                 : {}
         );
         setSourceFilterLinks({});
+        setConditionalTargets([]);
         setEntriesFields([]);
         setEntriesColumnFieldIds([]);
         setEntriesFilterLinks({});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selection]);
+
+    // A goal's conditional targets key off whichever of the board's filter clauses this
+    // placement's source(s) follow, drawn from the checklist selections above rather than
+    // from saved config since nothing is persisted yet.
+    const isGoalWidget = selectedWidget?.resultType === AnalyticResultTypeEnum.Goal;
+    const goalConnectedClauses = useMemo(() => {
+        if (!isGoalWidget) return [];
+        const mergedLinks: Record<string, Record<string, string>> = {};
+        for (const perFilter of Object.values(sourceFilterLinks)) {
+            for (const [filterId, fieldBySlot] of Object.entries(perFilter)) {
+                mergedLinks[filterId] = { ...mergedLinks[filterId], ...fieldBySlot };
+            }
+        }
+        const fieldNameById: Record<string, string> = {};
+        for (const fields of fieldsByTracker.values())
+            for (const f of fields) fieldNameById[f.id] = f.name;
+        return connectedClausesFromLinks(mergedLinks, filterCandidates, fieldNameById);
+    }, [isGoalWidget, sourceFilterLinks, fieldsByTracker, filterCandidates]);
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
@@ -174,6 +203,9 @@ export function PlaceFromLibraryForm({
                         trackerId: source.trackerId,
                         links: sourceFilterLinks[source.id] ?? {},
                     })),
+                    isGoalWidget && goalConnectedClauses.length > 0
+                        ? conditionalTargets
+                        : undefined,
                 );
             } else if (selectedEntriesWidget) {
                 await onPlaceEntriesWidget(
@@ -339,6 +371,14 @@ export function PlaceFromLibraryForm({
                 <YAxisScaleOption
                     yAxisFromZero={yAxisFromZero}
                     onChange={setYAxisFromZero}
+                />
+            )}
+
+            {isGoalWidget && goalConnectedClauses.length > 0 && (
+                <GoalConditionalTargetsEditor
+                    clauses={goalConnectedClauses}
+                    value={conditionalTargets}
+                    onChange={setConditionalTargets}
                 />
             )}
 
