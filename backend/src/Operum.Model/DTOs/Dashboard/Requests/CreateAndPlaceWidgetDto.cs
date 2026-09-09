@@ -43,6 +43,10 @@ namespace Operum.Model.DTOs.Dashboard.Requests
         [Required]
         public string Code { get; set; } = string.Empty;
 
+        // Line/Bar only: how the axis field is bucketed before Code aggregates it (see
+        // AnalyticGroupings). Null/empty for every other result type.
+        public string? Grouping { get; set; }
+
         // Combined charts only: keep just the x-axis values every source has a point for,
         // so the series line up over the same range. A single-source item ignores it.
         public bool MatchedValuesOnly { get; set; }
@@ -94,6 +98,10 @@ namespace Operum.Model.DTOs.Dashboard.Requests
             RuleFor(x => x.Code)
                 .NotEmpty().WithMessage(x => Messages.Required("code"))
                 .Must(AnalyticCodes.IsValid).WithMessage(x => Messages.Invalid("code"));
+
+            RuleFor(x => x.Grouping)
+                .Must(g => string.IsNullOrEmpty(g) || AnalyticGroupings.IsValid(g))
+                .WithMessage(x => Messages.Invalid("grouping"));
 
             RuleFor(x => x.Sources)
                 .NotEmpty().WithMessage(x => Messages.Required("sources"));

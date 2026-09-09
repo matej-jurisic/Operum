@@ -27,6 +27,9 @@ namespace Operum.Model.DTOs.Dashboard
         // The single analytic definition every source below is calculated with.
         public string ResultType { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
+        // Line/Bar only: how the axis field is bucketed before Code aggregates it (see
+        // AnalyticGroupings). Null for every other result type.
+        public string? Grouping { get; set; }
         // Combined charts only: whether the chart is restricted to x-axis values shared by
         // every source.
         public bool MatchedValuesOnly { get; set; }

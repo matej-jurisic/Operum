@@ -117,8 +117,8 @@ namespace Operum.Tests.Tests.Analytics
             var (trackerId, amountId, _) = await SeedTracker(client);
 
             var dto = CountDto(trackerId, amountId);
-            // A bar chart code the single-value definition knows nothing about.
-            dto.Code = AnalyticCodes.CountBarChart;
+            // A donut chart code the single-value definition knows nothing about.
+            dto.Code = AnalyticCodes.DonutChart;
 
             var response = await client.PostAsJsonAsync("analytics/evaluate", dto);
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -193,7 +193,8 @@ namespace Operum.Tests.Tests.Analytics
             var dto = new EvaluateWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources =
                 [
                     Source(weight.trackerId, Field(weight.dayId, AnalyticPurposes.Xaxis), Field(weight.amountId, AnalyticPurposes.Yaxis)),
@@ -243,7 +244,8 @@ namespace Operum.Tests.Tests.Analytics
             var dto = new EvaluateWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources =
                 [
                     Source(mine.trackerId, Field(mine.dayId, AnalyticPurposes.Xaxis), Field(mine.amountId, AnalyticPurposes.Yaxis)),

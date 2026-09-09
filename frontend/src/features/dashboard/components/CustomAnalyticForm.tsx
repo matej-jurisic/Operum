@@ -22,8 +22,11 @@ import { AnalyticResultTypeEnum } from "../../analytics/enums/AnalyticResultType
 import {
     AnalyticConfigDto,
     CodeDto,
+    GroupingDto,
     PurposeDto,
     ResultTypeDto,
+    effectivePurposes,
+    usesGrouping,
 } from "../../analytics/types/AnalyticConfigDto";
 import { fieldsController } from "../../fields/api/fieldsController";
 import { FieldDto } from "../../fields/types/FieldDto";
@@ -115,6 +118,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
     const [trackers, setTrackers] = useState<TrackerDto[]>([]);
     const [config, setConfig] = useState<AnalyticConfigDto>();
     const [resultType, setResultType] = useState<string | null>(null);
+    const [grouping, setGrouping] = useState<string | null>(null);
     const [code, setCode] = useState<string | null>(null);
     const [name, setName] = useState("");
     const [rows, setRows] = useState<TrackerRow[]>([makeEmptyRow()]);
@@ -150,10 +154,36 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
         return map;
     }, [config]);
 
+    const selectedResultType: ResultTypeDto | undefined = resultType
+        ? resultTypesByName[resultType]
+        : undefined;
+    const typeUsesGrouping = usesGrouping(selectedResultType);
+    const selectedGrouping: GroupingDto | undefined =
+        grouping !== null
+            ? selectedResultType?.groupings.find((g) => g.grouping === grouping)
+            : undefined;
+
     const selectedCode: CodeDto | undefined =
         resultType && code
             ? resultTypesByName[resultType]?.codes.find((c) => c.code === code)
             : undefined;
+
+    // For a grouping type the "Calculation" options depend on the chosen grouping; the
+    // field mapping is the grouping purpose plus whatever the aggregation reads.
+    const availableCodes: CodeDto[] = !selectedResultType
+        ? []
+        : typeUsesGrouping
+          ? selectedResultType.codes.filter((c) =>
+                selectedGrouping?.allowedCodes.includes(c.code),
+            )
+          : selectedResultType.codes;
+    const purposes: PurposeDto[] = effectivePurposes(
+        selectedResultType,
+        selectedGrouping,
+        selectedCode,
+    );
+    const calculationChosen =
+        !!selectedCode && (!typeUsesGrouping || !!selectedGrouping);
 
     // A scatter "Correlation": two trackers, each mapping the join field and a value, one
     // becoming the x-axis and the other the y-axis of a single point cloud.
@@ -220,6 +250,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
 
     const handleResultTypeChange = (value: string | null) => {
         setResultType(value);
+        setGrouping(null);
         setCode(null);
         clearFieldMappings();
         // Extra trackers only exist to be merged into one chart, which the new type may
@@ -228,6 +259,21 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
             setRows((prev) => prev.slice(0, 1));
             setMatchedValuesOnly(false);
         }
+    };
+
+    // Switching the grouping can invalidate the chosen aggregation, so clear it unless the
+    // new grouping still allows it.
+    const handleGroupingChange = (value: string | null) => {
+        setGrouping(value);
+        const stillValid =
+            !!code &&
+            !!value &&
+            (selectedResultType?.groupings
+                .find((g) => g.grouping === value)
+                ?.allowedCodes.includes(code) ??
+                false);
+        if (!stillValid) setCode(null);
+        clearFieldMappings();
     };
 
     const handleCodeChange = (value: string | null) => {
@@ -280,8 +326,8 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
 
     const isRowComplete = (row: TrackerRow): boolean =>
         !!row.trackerId &&
-        !!selectedCode &&
-        selectedCode.purposes.every((p) => !!row.fieldMappings[p.name]);
+        calculationChosen &&
+        purposes.every((p) => !!row.fieldMappings[p.name]);
 
     // The purpose that lands on the shared x-axis of a combined line/bar chart. Only these
     // types offer the "matched values only" option.
@@ -326,6 +372,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                 name: name.trim() || undefined,
                 resultType: resultType!,
                 code: code!,
+                grouping: grouping ?? undefined,
                 matchedValuesOnly:
                     rows.length > 1 && !!xAxisPurpose && matchedValuesOnly,
                 goalTarget: isGoal ? goalTarget.trim() : undefined,
@@ -351,14 +398,19 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
         value: rt.name,
         label: rt.name,
     }));
-    const codeOptions = (
-        resultType ? resultTypesByName[resultType]?.codes ?? [] : []
-    ).map((c) => ({ value: c.code, label: c.name }));
+    const groupingOptions = (selectedResultType?.groupings ?? []).map((g) => ({
+        value: g.grouping,
+        label: g.name,
+    }));
+    const codeOptions = availableCodes.map((c) => ({
+        value: c.code,
+        label: c.name,
+    }));
 
     const canAddAnotherTracker =
         isCombinable && !isPairedCode && rows.length < MAX_TRACKERS;
     const canSubmit =
-        !!selectedCode &&
+        calculationChosen &&
         rows.every(isRowComplete) &&
         rows.every((row) => followLinksComplete(row.filterLinks, filterCandidates, row.fields)) &&
         (!isPairedCode || rows.length === 2) &&
@@ -373,13 +425,23 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                 value={resultType}
                 onChange={handleResultTypeChange}
             />
+            {typeUsesGrouping && (
+                <Select
+                    label="Group by"
+                    placeholder="Select a grouping"
+                    data={groupingOptions}
+                    value={grouping}
+                    onChange={handleGroupingChange}
+                    disabled={!resultType}
+                />
+            )}
             <Select
                 label="Calculation"
                 placeholder="Select a calculation"
                 data={codeOptions}
                 value={code}
                 onChange={handleCodeChange}
-                disabled={!resultType}
+                disabled={!resultType || (typeUsesGrouping && !grouping)}
             />
 
             <TextInput
@@ -420,7 +482,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                                 searchable
                             />
 
-                            {selectedCode?.purposes.map((purpose) => (
+                            {calculationChosen && purposes.map((purpose) => (
                                 <Select
                                     key={purpose.name}
                                     label={purpose.name}

@@ -140,7 +140,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [LineSource(tracker)]
             });
             Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
@@ -169,7 +170,8 @@ namespace Operum.Tests.Tests.Dashboards
             {
                 Name = name,
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources =
                 [
                     new CreateWidgetSourceRequestDto
@@ -200,7 +202,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.BarChart,
-                Code = AnalyticCodes.CountBarChart,
+                Code = AnalyticCodes.Count,
+                Grouping = AnalyticGroupings.Exact,
                 Sources = [BarSource(tracker)]
             });
             Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
@@ -446,7 +449,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [LineSource(weight), LineSource(steps)]
             });
             Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
@@ -513,7 +517,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [LineSource(byDate), LineSource(byCategory, byCategory.CategoryFieldId)]
             });
             Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
@@ -563,8 +568,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                // A bar chart code, which the line chart definition knows nothing about.
-                Code = AnalyticCodes.CountBarChart,
+                // A donut chart code, which the line chart definition knows nothing about.
+                Code = AnalyticCodes.DonutChart,
                 Sources = [LineSource(tracker)]
             });
 
@@ -661,7 +666,8 @@ namespace Operum.Tests.Tests.Dashboards
                 var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
                 {
                     ResultType = AnalyticTypes.BarChart,
-                    Code = AnalyticCodes.CountBarChart,
+                    Code = AnalyticCodes.Count,
+                    Grouping = AnalyticGroupings.Exact,
                     Sources = [BarSource(tracker)]
                 });
                 Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
@@ -689,7 +695,8 @@ namespace Operum.Tests.Tests.Dashboards
                 var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
                 {
                     ResultType = AnalyticTypes.BarChart,
-                    Code = AnalyticCodes.CountBarChart,
+                    Code = AnalyticCodes.Count,
+                    Grouping = AnalyticGroupings.Exact,
                     Sources = [BarSource(tracker)]
                 });
                 Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
@@ -719,7 +726,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [LineSource(tracker)]
             });
             Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
@@ -747,7 +755,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources =
                 [
                     new CreateAndPlaceWidgetSourceDto
@@ -780,7 +789,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources =
                 [
                     new CreateAndPlaceWidgetSourceDto
@@ -817,7 +827,8 @@ namespace Operum.Tests.Tests.Dashboards
 
             var item = await Data(addResponse);
             Assert.Equal(AnalyticTypes.LineChart, item.GetProperty("resultType").GetString());
-            Assert.Equal(AnalyticCodes.LineChart, item.GetProperty("code").GetString());
+            Assert.Equal(AnalyticCodes.RawValues, item.GetProperty("code").GetString());
+            Assert.Equal(AnalyticGroupings.None, item.GetProperty("grouping").GetString());
             Assert.Equal(1, item.GetProperty("sources").GetArrayLength());
             Assert.Equal(2, item.GetProperty("sources")[0].GetProperty("fields").GetArrayLength());
 
@@ -929,7 +940,8 @@ namespace Operum.Tests.Tests.Dashboards
             var response = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.BarChart,
-                Code = AnalyticCodes.AverageBarChart,
+                Code = AnalyticCodes.Average,
+                Grouping = AnalyticGroupings.Exact,
                 Sources =
                 [
                     new CreateAndPlaceWidgetSourceDto
@@ -976,7 +988,8 @@ namespace Operum.Tests.Tests.Dashboards
             var response = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.BarChart,
-                Code = AnalyticCodes.MonthlyBarChart,
+                Code = AnalyticCodes.Sum,
+                Grouping = AnalyticGroupings.Monthly,
                 Sources =
                 [
                     new CreateAndPlaceWidgetSourceDto
@@ -999,6 +1012,141 @@ namespace Operum.Tests.Tests.Dashboards
             Assert.Equal(8, points[0].GetProperty("value").GetDouble());
             Assert.Equal("2026-03", points[1].GetProperty("name").GetString());
             Assert.Equal(7, points[1].GetProperty("value").GetDouble());
+        }
+
+        // Grouping and aggregation are separate now: a weekly line chart can average each
+        // week's values, not only sum them.
+        [Fact]
+        public async Task WeeklyAverageLineChart_AveragesEachWeeksValues()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("weeklyavgline");
+
+            // Seeded entry: 2026-01-01 (Thursday), Amount 5. Same week gets a 15 (avg 10);
+            // the following week a lone 20.
+            var tracker = await CreateCapableTracker(client, "Weight");
+            await AddEntry(client, tracker.Id, "2026-01-02", "15");
+            await AddEntry(client, tracker.Id, "2026-01-08", "20");
+
+            var dashboardId = await CreateDashboard(client);
+            var chartId = await PlaceGroupedLineChart(
+                client, dashboardId, tracker, AnalyticGroupings.Weekly, AnalyticCodes.Average);
+
+            var points = Analytic(ChartFor(await Widgets(client, dashboardId), chartId)).GetProperty("points");
+            Assert.Equal(2, points.GetArrayLength());
+            Assert.Equal("2025-12-29", points[0].GetProperty("x").GetString());
+            Assert.Equal(10, points[0].GetProperty("y").GetDouble());
+            Assert.Equal("2026-01-05", points[1].GetProperty("x").GetString());
+            Assert.Equal(20, points[1].GetProperty("y").GetDouble());
+        }
+
+        // Count reads no value field: each point is the number of entries in that bucket.
+        [Fact]
+        public async Task DailyCountLineChart_CountsEntriesPerDay_WithNoValueField()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("dailycountline");
+
+            var tracker = await CreateCapableTracker(client, "Weight");
+            await AddEntry(client, tracker.Id, "2026-01-01", "99");
+            await AddEntry(client, tracker.Id, "2026-01-03", "1");
+
+            var dashboardId = await CreateDashboard(client);
+            var response = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.LineChart,
+                Code = AnalyticCodes.Count,
+                Grouping = AnalyticGroupings.Daily,
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields = [new CreateAnalyticFieldDto { FieldId = tracker.DayFieldId, Purpose = AnalyticPurposes.Xaxis }]
+                    }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var chartId = (await Data(response)).GetProperty("id").GetString()!;
+
+            var points = Analytic(ChartFor(await Widgets(client, dashboardId), chartId)).GetProperty("points");
+            Assert.Equal(2, points.GetArrayLength());
+            Assert.Equal("2026-01-01", points[0].GetProperty("x").GetString());
+            Assert.Equal(2, points[0].GetProperty("y").GetDouble());
+            Assert.Equal("2026-01-03", points[1].GetProperty("x").GetString());
+            Assert.Equal(1, points[1].GetProperty("y").GetDouble());
+        }
+
+        // Cumulative Sum composes with a date bucket: a running total of each month's total.
+        [Fact]
+        public async Task MonthlyCumulativeSumLineChart_RunningTotalOfMonthlyTotals()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("monthlycumline");
+
+            // Seeded 2026-01-01 Amount 5; +3 in January (total 8), +7 in March (8 -> 15).
+            var tracker = await CreateCapableTracker(client, "Weight");
+            await AddEntry(client, tracker.Id, "2026-01-20", "3");
+            await AddEntry(client, tracker.Id, "2026-03-10", "7");
+
+            var dashboardId = await CreateDashboard(client);
+            var chartId = await PlaceGroupedLineChart(
+                client, dashboardId, tracker, AnalyticGroupings.Monthly, AnalyticCodes.CumulativeSum);
+
+            var points = Analytic(ChartFor(await Widgets(client, dashboardId), chartId)).GetProperty("points");
+            Assert.Equal(2, points.GetArrayLength());
+            Assert.Equal("2026-01", points[0].GetProperty("x").GetString());
+            Assert.Equal(8, points[0].GetProperty("y").GetDouble());
+            Assert.Equal("2026-03", points[1].GetProperty("x").GetString());
+            Assert.Equal(15, points[1].GetProperty("y").GetDouble());
+        }
+
+        // Min per category: the lowest value in each category, not the sum.
+        [Fact]
+        public async Task MinPerCategoryBarChart_TakesTheLowestValueInEachCategory()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("minpercatbar");
+
+            // Seeded: Category "Cardio", Amount 5. Add a lower Cardio and a lone Strength.
+            var tracker = await CreateCapableTracker(client, "Weight");
+            await client.PostAsJsonAsync($"trackers/{tracker.Id}/entries", new CreateEntryDto
+            {
+                FieldValues = new() { ["Day"] = "2026-01-02", ["Amount"] = "2", ["Category"] = "Cardio" }
+            });
+            await client.PostAsJsonAsync($"trackers/{tracker.Id}/entries", new CreateEntryDto
+            {
+                FieldValues = new() { ["Day"] = "2026-01-03", ["Amount"] = "9", ["Category"] = "Strength" }
+            });
+
+            var dashboardId = await CreateDashboard(client);
+            var response = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.BarChart,
+                Code = AnalyticCodes.Min,
+                Grouping = AnalyticGroupings.Exact,
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields =
+                        [
+                            new CreateAnalyticFieldDto { FieldId = tracker.CategoryFieldId, Purpose = AnalyticPurposes.Name },
+                            new CreateAnalyticFieldDto { FieldId = tracker.AmountFieldId, Purpose = AnalyticPurposes.Value }
+                        ]
+                    }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var chartId = (await Data(response)).GetProperty("id").GetString()!;
+
+            var points = Analytic(ChartFor(await Widgets(client, dashboardId), chartId)).GetProperty("points")
+                .EnumerateArray()
+                .ToDictionary(p => p.GetProperty("name").GetString()!, p => p.GetProperty("value").GetDouble());
+            Assert.Equal(2, points.Count);
+            Assert.Equal(2, points["Cardio"]);
+            Assert.Equal(9, points["Strength"]);
         }
 
         [Fact]
@@ -1055,7 +1203,8 @@ namespace Operum.Tests.Tests.Dashboards
             var addResponse = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [LineSource(tracker)]
             });
             var itemId = (await Data(addResponse)).GetProperty("id").GetString()!;
@@ -1669,8 +1818,25 @@ namespace Operum.Tests.Tests.Dashboards
             var response = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [source]
+            });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (await Data(response)).GetProperty("id").GetString()!;
+        }
+
+        // Places a line chart that buckets Day by `grouping` and aggregates Amount with
+        // `code`, and returns its item id.
+        private static async Task<string> PlaceGroupedLineChart(
+            HttpClient client, string dashboardId, CapableTracker tracker, string grouping, string code)
+        {
+            var response = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.LineChart,
+                Code = code,
+                Grouping = grouping,
+                Sources = [LineSource(tracker)]
             });
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             return (await Data(response)).GetProperty("id").GetString()!;
@@ -1698,7 +1864,8 @@ namespace Operum.Tests.Tests.Dashboards
             var itemId = (await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [source]
             }))).GetProperty("id").GetString()!;
 
@@ -1768,7 +1935,8 @@ namespace Operum.Tests.Tests.Dashboards
             var itemId = (await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [labelled]
             }))).GetProperty("id").GetString()!;
 
@@ -1808,7 +1976,8 @@ namespace Operum.Tests.Tests.Dashboards
             var itemId = (await Data(await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
             {
                 ResultType = AnalyticTypes.LineChart,
-                Code = AnalyticCodes.LineChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
                 Sources = [LineSource(first), LineSource(second)]
             }))).GetProperty("id").GetString()!;
 

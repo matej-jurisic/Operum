@@ -51,13 +51,15 @@ namespace Operum.Service.Domain.Analytics
             {
                 ComposedChartSeriesDto? series = resolved.Result switch
                 {
+                    // YField is null for a Count line series (it reads no value field), same
+                    // as a Count bar series -- label and axis fall back to "Count".
                     LineChartAnalyticDto line => new ComposedChartSeriesDto
                     {
                         Key = resolved.Key,
-                        Label = resolved.Label ?? $"{resolved.TrackerName}: {line.YField.Name}",
+                        Label = resolved.Label ?? $"{resolved.TrackerName}: {line.YField?.Name ?? "Count"}",
                         RenderType = ComposedSeriesRenderTypes.Line,
                         XField = line.XField,
-                        ValueField = line.YField,
+                        ValueField = line.YField ?? new FieldDto { Name = "Count", Type = DataTypes.Number },
                         Points = line.Points.Select(p => new ComposedChartPointDto { X = p.X, Y = p.Y }).ToList(),
                         Color = resolved.TrackerColor
                     },

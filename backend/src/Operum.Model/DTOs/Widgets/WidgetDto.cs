@@ -29,6 +29,9 @@ namespace Operum.Model.DTOs.Widgets
         public string? Description { get; set; }
         public string ResultType { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
+        // Line/Bar only: how the axis field is bucketed before Code aggregates it (see
+        // AnalyticGroupings). Null for every other result type.
+        public string? Grouping { get; set; }
         public bool MatchedValuesOnly { get; set; }
         // Goal widgets only: the target the calculated value is shown as progress toward, in
         // the value field's own string format. Null for every other result type.

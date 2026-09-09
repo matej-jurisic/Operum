@@ -54,8 +54,8 @@ Charts are built in the Widget Library and calculated at query time. Each chart 
 |---|---|---|
 | Single Value | 12 | One headline metric: count, sum, min, max, average, standard deviation, unique count, most/least common, or yes/no counts and percentage |
 | Goal | 9 | A single value calculation shown as progress toward a target you set, with a progress bar and percentage. The target can switch based on the values of the board filters the widget follows |
-| Line Chart | 7 | Raw values, sum by category, cumulative running total, or daily/weekly/monthly/yearly totals |
-| Bar Chart | 7 | Count, sum, or average per category, or daily/weekly/monthly/yearly totals |
+| Line Chart | grouping x calc | Pick a grouping (none for raw values, exact value, or day/week/month/year) and a calculation (sum, average, count, min, max, or a cumulative running total) independently |
+| Bar Chart | grouping x calc | Pick a grouping (exact category, or day/week/month/year) and a calculation (sum, average, count, min, or max) independently |
 | Scatter Chart | 2 | Numeric X/Y point cloud for spotting correlations: one tracker's two fields, or two trackers paired on a shared match field |
 | Donut Chart | 1 | Groups entries by a category, sums a numeric field per group |
 | Calendar | 1 | Maps entries onto a date field, labeled with another field's value |

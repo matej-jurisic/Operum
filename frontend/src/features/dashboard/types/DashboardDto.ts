@@ -387,6 +387,8 @@ export interface DashboardItemDto {
     trackerIds: string[];
     resultType: string;
     code: string;
+    /** Line/Bar only: how the axis field is bucketed before the code aggregates it. */
+    grouping?: string;
     matchedValuesOnly: boolean;
     /** Line chart widgets only: whether the Y axis starts at zero or is fitted to the
         data's own range. */
@@ -421,6 +423,8 @@ export interface CreateAndPlaceWidgetDto {
     description?: string;
     resultType: string;
     code: string;
+    /** Line/Bar only: how the axis field is bucketed before the code aggregates it. */
+    grouping?: string;
     matchedValuesOnly?: boolean;
     /** Goal widgets only, and required for them: a number or an hh:mm:ss duration. */
     goalTarget?: string;

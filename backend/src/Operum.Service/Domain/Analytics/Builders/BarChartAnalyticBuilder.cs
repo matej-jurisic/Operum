@@ -11,69 +11,45 @@ namespace Operum.Service.Domain.Analytics.Builders
 {
     public class BarChartAnalyticBuilder : AnalyticResultBuilderBase
     {
-        private readonly Dictionary<string, IBarChartProcessor> _processors;
-
         public override string SupportedType => AnalyticTypes.BarChart;
-
-        public BarChartAnalyticBuilder()
-        {
-            _processors = new Dictionary<string, IBarChartProcessor>
-            {
-                [AnalyticCodes.CountBarChart] = new CountBarChartProcessor(),
-                [AnalyticCodes.SumBarChart] = new SumBarChartProcessor(),
-                [AnalyticCodes.AverageBarChart] = new AverageBarChartProcessor(),
-                [AnalyticCodes.DailyBarChart] = new DailyBarChartProcessor(),
-                [AnalyticCodes.WeeklyBarChart] = new WeeklyBarChartProcessor(),
-                [AnalyticCodes.MonthlyBarChart] = new MonthlyBarChartProcessor(),
-                [AnalyticCodes.YearlyBarChart] = new YearlyBarChartProcessor()
-            };
-        }
 
         protected override Result<AnalyticDto> BuildResult(AnalyticResultBuilderRequest request)
         {
             var result = new BarChartAnalyticDto
             {
-                Name = AnalyticDefinitionList.GetLabel(SupportedType, request.Analytic.Code),
+                Name = AnalyticDefinitionList.GetLabel(SupportedType, request.Analytic.Code, request.Analytic.Grouping),
                 Description = request.Analytic.Description,
                 Id = request.Analytic.Id,
             };
+
+            var code = request.Analytic.Code;
+            var grouping = request.Analytic.Grouping ?? AnalyticGroupings.Exact;
 
             var nameField = request.FieldMap.GetValueOrDefault(AnalyticPurposes.Name);
             if (nameField == null)
                 return Result.Success<AnalyticDto>(result);
 
-            if (!_processors.TryGetValue(request.Analytic.Code, out var processor))
-                return Result.Failure(ResultStatusCodes.BadRequest,
-                    $"Unsupported analytic code: {request.Analytic.Code}");
+            // Count is the only aggregation that reads no value field: each row in a bucket
+            // counts once. Every other one needs a value field.
+            var countsRows = code == AnalyticCodes.Count;
+            var valueField = request.FieldMap.GetValueOrDefault(AnalyticPurposes.Value);
+            if (valueField == null && !countsRows)
+                return Result.Success<AnalyticDto>(result);
 
-            List<DonutChartPointDto> dataPoints;
+            var dataPoints = request.Entries
+                .Select(e => new DonutChartPointDto
+                {
+                    Name = e.FieldValues.FirstOrDefault(f => f.FieldId == nameField.Id)?.GetValueAsString(),
+                    Value = valueField == null
+                        ? null
+                        : DataFormatters.FieldValueToNullableDouble(e.FieldValues.FirstOrDefault(f => f.FieldId == valueField.Id))
+                })
+                .Where(p => p.Name != null && (countsRows || p.Value != null))
+                .ToList();
 
-            if (request.Analytic.Code == AnalyticCodes.CountBarChart)
-            {
-                dataPoints = request.Entries
-                    .Select(e => new DonutChartPointDto
-                    {
-                        Name = e.FieldValues.FirstOrDefault(f => f.FieldId == nameField.Id)?.GetValueAsString(),
-                        Value = 1
-                    })
-                    .Where(p => p.Name != null)
-                    .ToList();
-            }
-            else
-            {
-                var valueField = request.FieldMap.GetValueOrDefault(AnalyticPurposes.Value);
-                if (valueField == null)
-                    return Result.Success<AnalyticDto>(result);
+            result.Points = new GroupedBarChartProcessor(grouping, code).Process(dataPoints);
 
-                dataPoints = request.Entries
-                    .Select(e => new DonutChartPointDto
-                    {
-                        Name = e.FieldValues.FirstOrDefault(f => f.FieldId == nameField.Id)?.GetValueAsString(),
-                        Value = DataFormatters.FieldValueToNullableDouble(e.FieldValues.FirstOrDefault(f => f.FieldId == valueField.Id))
-                    })
-                    .Where(p => p.Name != null && p.Value != null)
-                    .ToList();
-
+            if (valueField != null)
                 result.ValueField = new()
                 {
                     Id = valueField.Id,
@@ -82,9 +58,7 @@ namespace Operum.Service.Domain.Analytics.Builders
                     Description = valueField.Description,
                     Name = valueField.Name,
                 };
-            }
 
-            result.Points = processor.Process(dataPoints);
             result.NameField = new()
             {
                 Id = nameField.Id,

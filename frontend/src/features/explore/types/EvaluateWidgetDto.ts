@@ -22,6 +22,8 @@ export interface EvaluateSourceDto {
 export interface EvaluateWidgetDto {
     resultType: string;
     code: string;
+    /** Line/Bar only: how the axis field is bucketed before the code aggregates it. */
+    grouping?: string;
     /** Combined charts only: keep just the x-axis values every source has a point for. */
     matchedValuesOnly?: boolean;
     sources: EvaluateSourceDto[];

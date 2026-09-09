@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Operum.Model.Common;
 using Operum.Model.Constants.Analytics;
 using Operum.Model.Constants.Analytics.Definitions;
@@ -13,46 +13,38 @@ namespace Operum.Service.Domain.Analytics.Builders
 {
     public class LineChartAnalyticBuilder : AnalyticResultBuilderBase
     {
-        private readonly Dictionary<string, ILineChartProcessor> _processors;
-
         public override string SupportedType => AnalyticTypes.LineChart;
-
-        public LineChartAnalyticBuilder()
-        {
-            _processors = new Dictionary<string, ILineChartProcessor>
-            {
-                [AnalyticCodes.LineChart] = new LineChartProcessor(),
-                [AnalyticCodes.AggregatedSumLineChart] = new AggregatedSumLineChartProcessor(),
-                [AnalyticCodes.CumulativeLineChart] = new CumulativeLineChartProcessor(),
-                [AnalyticCodes.DailyLineChart] = new DailyLineChartProcessor(),
-                [AnalyticCodes.WeeklyLineChart] = new WeeklyLineChartProcessor(),
-                [AnalyticCodes.MonthlyLineChart] = new MonthlyLineChartProcessor(),
-                [AnalyticCodes.YearlyLineChart] = new YearlyLineChartProcessor()
-            };
-        }
 
         protected override Result<AnalyticDto> BuildResult(AnalyticResultBuilderRequest request)
         {
             var result = new LineChartAnalyticDto
             {
-                Name = AnalyticDefinitionList.GetLabel(SupportedType, request.Analytic.Code),
+                Name = AnalyticDefinitionList.GetLabel(SupportedType, request.Analytic.Code, request.Analytic.Grouping),
                 Description = request.Analytic.Description,
                 Id = request.Analytic.Id
             };
 
+            var code = request.Analytic.Code;
+            var grouping = request.Analytic.Grouping ?? AnalyticGroupings.None;
+
             var xField = request.FieldMap.GetValueOrDefault(AnalyticPurposes.Xaxis);
             var yField = request.FieldMap.GetValueOrDefault(AnalyticPurposes.Yaxis);
 
-            if (xField == null || yField == null)
+            // Count is the only aggregation that reads no value field; every other one needs
+            // one, and raw values needs the x too.
+            var countsRows = code == AnalyticCodes.Count;
+            if (xField == null || (yField == null && !countsRows))
                 return Result.Success<AnalyticDto>(result);
 
             var dataPoints = request.Entries
                 .Select(e => new LineChartPointDto
                 {
                     X = e.FieldValues.FirstOrDefault(f => f.FieldId == xField.Id)?.GetValueAsString(),
-                    Y = DataFormatters.FieldValueToNullableDouble(e.FieldValues.FirstOrDefault(f => f.FieldId == yField.Id))
+                    Y = yField == null
+                        ? null
+                        : DataFormatters.FieldValueToNullableDouble(e.FieldValues.FirstOrDefault(f => f.FieldId == yField.Id))
                 })
-                .Where(p => p.X != null && p.Y != null)
+                .Where(p => p.X != null && (countsRows || p.Y != null))
                 .ToList();
 
             // A line chart is read left-to-right along its x-axis, so the points are ordered
@@ -60,25 +52,27 @@ namespace Operum.Service.Domain.Analytics.Builders
             // query produced them: a linked view can sort on any field, or on none, and
             // connecting the line in that order draws a meaningless zig-zag. The analytic
             // query has no row limit, so a view's sort only ever changed the draw order, not
-            // which entries are plotted, and its filters still apply as before. The date
-            // buckets (daily/weekly/...) re-sort their own output, so this is a no-op for
-            // them; for the cumulative variant it also makes the running total correct
-            // instead of dependent on insertion order.
+            // which entries are plotted, and its filters still apply as before. The grouped
+            // processor keeps this order for its buckets; for the cumulative variant it also
+            // makes the running total correct instead of dependent on insertion order.
             dataPoints = OrderByX(dataPoints, xField.Type);
 
-            if (!_processors.TryGetValue(request.Analytic.Code, out var processor))
-                return Result.Failure(ResultStatusCodes.BadRequest,
-                    $"Unsupported analytic code: {request.Analytic.Code}");
+            ILineChartProcessor processor = code == AnalyticCodes.RawValues
+                ? new LineChartProcessor()
+                : new GroupedLineChartProcessor(grouping, code);
 
             result.Points = processor.Process(dataPoints);
-            result.YField = new()
-            {
-                Id = yField.Id,
-                Type = yField.Type,
-                Required = yField.Required,
-                Description = yField.Description,
-                Name = yField.Name,
-            };
+
+            if (yField != null)
+                result.YField = new()
+                {
+                    Id = yField.Id,
+                    Type = yField.Type,
+                    Required = yField.Required,
+                    Description = yField.Description,
+                    Name = yField.Name,
+                };
+
             result.XField = new()
             {
                 Id = xField.Id,

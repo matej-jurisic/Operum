@@ -33,7 +33,8 @@ export function LineChartCard({
     const layout = useCardLayout(fillHeight);
 
     // The backend returns the analytic with no axis fields when they can no longer be
-    // resolved (e.g. a field was deleted). Nothing can be plotted in that case.
+    // resolved (e.g. a field was deleted). Nothing can be plotted in that case. A Count
+    // calculation legitimately has no yField: every point is a row tally.
     const { xField, yField } = analytic;
 
     return (
@@ -47,7 +48,7 @@ export function LineChartCard({
             onEdit={onEdit}
             title={analytic.name}
         >
-            {xField && yField ? (
+            {xField ? (
                 <LineChart
                     tooltipAnimationDuration={200}
                     gridAxis="x"
@@ -64,14 +65,16 @@ export function LineChartCard({
                         {
                             name: "y",
                             color: color,
-                            label: yField.name,
+                            label: yField?.name ?? "Count",
                         },
                     ]}
                     xAxisProps={{
                         tickFormatter: getAxisFormatter(xField.type),
                     }}
                     yAxisProps={{
-                        tickFormatter: getAxisFormatter(yField.type),
+                        tickFormatter: yField
+                            ? getAxisFormatter(yField.type)
+                            : undefined,
                         // Anchored at zero by default; fitted to the data's own range
                         // when the widget opts out, so a series that only ever moves
                         // between e.g. 1000 and 1100 isn't a flat line pinned to the top.

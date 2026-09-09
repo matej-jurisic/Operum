@@ -30,9 +30,13 @@ import { AnalyticResultTypeEnum } from "../../analytics/enums/AnalyticResultType
 import {
     AnalyticConfigDto,
     CodeDto,
+    GroupingDto,
     PurposeDto,
     ResultTypeDto,
+    effectivePurposes,
+    usesGrouping,
 } from "../../analytics/types/AnalyticConfigDto";
+import { resolveLegacyCalculation } from "../../analytics/legacyLineBarCodes";
 import { AnalyticDto } from "../../analytics/types/AnalyticDto";
 import { fieldsController } from "../../fields/api/fieldsController";
 import { FieldDto } from "../../fields/types/FieldDto";
@@ -69,6 +73,7 @@ interface SourceData {
 
 interface ExploreState {
     resultType: string | null;
+    grouping: string | null;
     code: string | null;
     matchedValuesOnly: boolean;
     sources: SourceInput[];
@@ -83,6 +88,7 @@ const emptySource = (): SourceInput => ({
 
 const EMPTY_STATE: ExploreState = {
     resultType: null,
+    grouping: null,
     code: null,
     matchedValuesOnly: false,
     sources: [emptySource()],
@@ -114,7 +120,13 @@ function readStateFromUrl(raw: string | null): ExploreState {
         const sources = Array.isArray(parsed.sources) && parsed.sources.length > 0
             ? parsed.sources.map((s) => ({ ...emptySource(), ...s }))
             : [emptySource()];
-        return { ...parsed, sources };
+        // A URL bookmarked before grouping and aggregation were split carries one fused
+        // Line/Bar code and no grouping.
+        const { grouping, code } = resolveLegacyCalculation(
+            parsed.grouping,
+            parsed.code,
+        );
+        return { ...parsed, grouping, code, sources };
     } catch {
         return EMPTY_STATE;
     }
@@ -135,6 +147,7 @@ export default function ExplorePage() {
     const [config, setConfig] = useState<AnalyticConfigDto>();
 
     const [resultType, setResultType] = useState(initial.resultType);
+    const [grouping, setGrouping] = useState(initial.grouping);
     const [code, setCode] = useState(initial.code);
     const [matchedValuesOnly, setMatchedValuesOnly] = useState(
         initial.matchedValuesOnly,
@@ -186,10 +199,34 @@ export default function ExplorePage() {
         return map;
     }, [config]);
 
+    const selectedResultType: ResultTypeDto | undefined = resultType
+        ? resultTypesByName[resultType]
+        : undefined;
+    const typeUsesGrouping = usesGrouping(selectedResultType);
+    const selectedGrouping: GroupingDto | undefined =
+        grouping !== null
+            ? selectedResultType?.groupings.find((g) => g.grouping === grouping)
+            : undefined;
+
     const selectedCode: CodeDto | undefined =
         resultType && code
             ? resultTypesByName[resultType]?.codes.find((c) => c.code === code)
             : undefined;
+
+    const availableCodes: CodeDto[] = !selectedResultType
+        ? []
+        : typeUsesGrouping
+          ? selectedResultType.codes.filter((c) =>
+                selectedGrouping?.allowedCodes.includes(c.code),
+            )
+          : selectedResultType.codes;
+    const purposes: PurposeDto[] = effectivePurposes(
+        selectedResultType,
+        selectedGrouping,
+        selectedCode,
+    );
+    const calculationChosen =
+        !!selectedCode && (!typeUsesGrouping || !!selectedGrouping);
 
     const isPairedCode = !!selectedCode && codeSpansTrackers(selectedCode);
     const isCombinable =
@@ -216,11 +253,26 @@ export default function ExplorePage() {
 
     const handleResultTypeChange = (value: string | null) => {
         setResultType(value);
+        setGrouping(null);
         setCode(null);
         setResult(undefined);
         const keepCount = !!value && COMBINABLE_TYPES.includes(value);
         reshapeSources(keepCount ? sources.length : 1, true);
         if (!keepCount) setMatchedValuesOnly(false);
+    };
+
+    const handleGroupingChange = (value: string | null) => {
+        setGrouping(value);
+        setResult(undefined);
+        const stillValid =
+            !!code &&
+            !!value &&
+            (resultTypesByName[resultType ?? ""]?.groupings
+                .find((g) => g.grouping === value)
+                ?.allowedCodes.includes(code) ??
+                false);
+        if (!stillValid) setCode(null);
+        reshapeSources(sources.length, true);
     };
 
     const handleCodeChange = (value: string | null) => {
@@ -298,8 +350,8 @@ export default function ExplorePage() {
 
     const isRowComplete = (row: SourceInput): boolean =>
         !!row.trackerId &&
-        !!selectedCode &&
-        selectedCode.purposes.every((p) => !!row.fieldByPurpose[p.name]);
+        calculationChosen &&
+        purposes.every((p) => !!row.fieldByPurpose[p.name]);
 
     const mappedFields = (row: SourceInput) =>
         Object.entries(row.fieldByPurpose)
@@ -316,7 +368,7 @@ export default function ExplorePage() {
             }));
 
     const canRun =
-        !!selectedCode &&
+        calculationChosen &&
         sources.every(isRowComplete) &&
         (!isPairedCode || sources.length === 2);
 
@@ -333,6 +385,7 @@ export default function ExplorePage() {
             {
                 q: JSON.stringify({
                     resultType,
+                    grouping,
                     code,
                     matchedValuesOnly,
                     sources,
@@ -345,6 +398,7 @@ export default function ExplorePage() {
         try {
             const res = await exploreController.evaluate({
                 resultType: resultType!,
+                grouping: grouping ?? undefined,
                 code: code!,
                 matchedValuesOnly: sendMatchedValuesOnly,
                 sources: sources.map((s) => ({
@@ -359,7 +413,7 @@ export default function ExplorePage() {
             setIsEvaluating(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [canRun, resultType, code, matchedValuesOnly, sources, sendMatchedValuesOnly]);
+    }, [canRun, resultType, grouping, code, matchedValuesOnly, sources, sendMatchedValuesOnly]);
 
     // Evaluate once, immediately, when the page opened on a shared/bookmarked exploration.
     useEffect(() => {
@@ -395,9 +449,14 @@ export default function ExplorePage() {
             value: rt.name,
             label: rt.name,
         }));
-    const codeOptions = (
-        resultType ? resultTypesByName[resultType]?.codes ?? [] : []
-    ).map((c) => ({ value: c.code, label: c.name }));
+    const groupingOptions = (selectedResultType?.groupings ?? []).map((g) => ({
+        value: g.grouping,
+        label: g.name,
+    }));
+    const codeOptions = availableCodes.map((c) => ({
+        value: c.code,
+        label: c.name,
+    }));
 
     return (
         <Stack gap="md" h="100%">
@@ -431,13 +490,26 @@ export default function ExplorePage() {
                                     value={resultType}
                                     onChange={handleResultTypeChange}
                                 />
+                                {typeUsesGrouping && (
+                                    <Select
+                                        label="Group by"
+                                        placeholder="Select a grouping"
+                                        data={groupingOptions}
+                                        value={grouping}
+                                        onChange={handleGroupingChange}
+                                        disabled={!resultType}
+                                    />
+                                )}
                                 <Select
                                     label="Calculation"
                                     placeholder="Select a calculation"
                                     data={codeOptions}
                                     value={code}
                                     onChange={handleCodeChange}
-                                    disabled={!resultType}
+                                    disabled={
+                                        !resultType ||
+                                        (typeUsesGrouping && !grouping)
+                                    }
                                 />
 
                                 {sources.map((row, index) => {
@@ -452,9 +524,7 @@ export default function ExplorePage() {
                                             source={row}
                                             fields={data.fields}
                                             views={data.views}
-                                            purposes={
-                                                selectedCode?.purposes ?? []
-                                            }
+                                            purposes={purposes}
                                             heading={
                                                 isPairedCode
                                                     ? index === 0
@@ -572,6 +642,7 @@ export default function ExplorePage() {
                                     <Divider my="sm" />
                                     <PromoteControls
                                         resultType={resultType!}
+                                        grouping={grouping ?? undefined}
                                         code={code!}
                                         matchedValuesOnly={sendMatchedValuesOnly}
                                         sources={sources.map((s) => ({

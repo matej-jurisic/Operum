@@ -25,24 +25,23 @@ namespace Operum.Service.Domain.Analytics
         {
             var resultType = request.Analytic.ResultType;
             var code = request.Analytic.Code;
+            var grouping = request.Analytic.Grouping;
 
-            if (!AnalyticDefinitionList.IsValidForType(resultType, code))
+            if (!AnalyticDefinitionList.IsValidForType(resultType, code, grouping))
                 return Result.Failure(ResultStatusCodes.BadRequest,
-                    $"Code '{code}' not allowed for {resultType}");
+                    $"Calculation '{grouping}/{code}' not allowed for {resultType}");
 
-            var def = AnalyticDefinitionList.ByResultType[resultType];
-            var fieldMap = request.FieldMap;
+            var required = AnalyticDefinitionList.GetRequiredPurposes(resultType, code, grouping).ToHashSet();
 
-            foreach (var (purpose, field) in fieldMap)
+            foreach (var (purpose, field) in request.FieldMap)
             {
-                if (!def.Purposes.Contains(purpose))
+                if (!required.Contains(purpose))
                     return Result.Failure(ResultStatusCodes.BadRequest,
-                        $"Purpose '{purpose}' not supported for {resultType}");
+                        $"Purpose '{purpose}' is not part of this calculation for {resultType}");
 
-                var allowedTypes = def.Codes[code].AllowedDataTypes.GetValueOrDefault(purpose);
-                if (allowedTypes != null && !allowedTypes.Contains(field.Type))
+                if (!AnalyticDefinitionList.IsValidDataType(resultType, code, purpose, field.Type, grouping))
                     return Result.Failure(ResultStatusCodes.BadRequest,
-                        $"Field '{field.Name}' of type '{field.Type}' is not allowed for purpose '{purpose}' in code '{code}'");
+                        $"Field '{field.Name}' of type '{field.Type}' is not allowed for purpose '{purpose}'");
             }
 
             return Result.Success();

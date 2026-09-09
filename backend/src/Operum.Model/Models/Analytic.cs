@@ -13,6 +13,12 @@ namespace Operum.Model.Models
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
+
+        // Line/Bar only: how the axis field is bucketed before Code aggregates each bucket
+        // (see AnalyticGroupings). Null for every other result type, whose calculation is
+        // the Code alone.
+        public string? Grouping { get; set; }
+
         public string ResultType { get; set; } = string.Empty;
 
         // Goal widgets only: the target GoalAnalyticBuilder shows the calculated value as

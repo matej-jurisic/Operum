@@ -34,6 +34,11 @@ namespace Operum.Model.DTOs.Widgets.Requests
         [Required]
         public string Code { get; set; } = string.Empty;
 
+        // Line/Bar only: how the axis field is bucketed before Code aggregates it (see
+        // AnalyticGroupings). Null/empty for every other result type. WidgetsService settles
+        // whether the (ResultType, Grouping, Code) triple is coherent.
+        public string? Grouping { get; set; }
+
         // Combined charts only: keep just the x-axis values every source has a point for,
         // so the series line up over the same range. A single-source widget ignores it.
         public bool MatchedValuesOnly { get; set; }
@@ -80,6 +85,10 @@ namespace Operum.Model.DTOs.Widgets.Requests
             RuleFor(x => x.Code)
                 .NotEmpty().WithMessage(x => Messages.Required("code"))
                 .Must(AnalyticCodes.IsValid).WithMessage(x => Messages.Invalid("code"));
+
+            RuleFor(x => x.Grouping)
+                .Must(g => string.IsNullOrEmpty(g) || AnalyticGroupings.IsValid(g))
+                .WithMessage(x => Messages.Invalid("grouping"));
 
             RuleFor(x => x.Sources)
                 .NotEmpty().WithMessage(x => Messages.Required("sources"));

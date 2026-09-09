@@ -25,16 +25,29 @@ namespace Operum.Service.Services.Analytics
                 {
                     Name = rt.Key,
                     WidgetOnly = rt.Value.WidgetOnly,
+                    GroupingPurpose = rt.Value.GroupingPurpose,
                     Codes = [.. rt.Value.Codes.Select(code => new AnalyticConfigCode
                     {
                         Code = code.Key,
-                        Name = string.IsNullOrEmpty(code.Value.Label) ? code.Key : code.Value.Label,
+                        // For a grouping type the composed label depends on the grouping too,
+                        // so the form builds the display name itself; Name here is the bare
+                        // aggregation label.
+                        Name = rt.Value.UsesGrouping
+                            ? AnalyticDefinitionList.GetAggregationLabel(code.Key)
+                            : string.IsNullOrEmpty(code.Value.Label) ? code.Key : code.Value.Label,
                         Purposes = [.. code.Value.AllowedDataTypes
                             .Select(p => new AnalyticConfigPurpose
                             {
                                 Name = p.Key,
                                 AllowedDataTypes = [.. p.Value]
                             })]
+                    })],
+                    Groupings = [.. rt.Value.Groupings.Select(g => new AnalyticConfigGrouping
+                    {
+                        Grouping = g.Key,
+                        Name = g.Value.Label,
+                        AllowedDataTypes = [.. g.Value.AllowedAxisTypes],
+                        AllowedCodes = [.. g.Value.AllowedCodes]
                     })]
                 })]
             };
@@ -51,7 +64,11 @@ namespace Operum.Service.Services.Analytics
         {
             var user = currentUserService.GetCurrentUser();
 
-            if (!AnalyticDefinitionList.IsValidForType(dto.ResultType, dto.Code))
+            // A shared Explore URL bookmarked before grouping and aggregation were split
+            // carries a single fused Line/Bar code; rewrite it to the current pair.
+            var (grouping, code) = LegacyLineBarCodes.Resolve(dto.Grouping, dto.Code);
+
+            if (!AnalyticDefinitionList.IsValidForType(dto.ResultType, code, grouping))
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("code for this result type"));
 
             // A Goal needs a target to be worth anything, and that only exists on a saved
@@ -59,7 +76,7 @@ namespace Operum.Service.Services.Analytics
             if (dto.ResultType == AnalyticTypes.Goal)
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.NotAllowed("evaluating a goal without a saved target"));
 
-            var isPaired = AnalyticTypes.RequiresPairedSources(dto.ResultType, dto.Code);
+            var isPaired = AnalyticTypes.RequiresPairedSources(dto.ResultType, code);
 
             // Source count, gated exactly as WidgetsService.CreateWidget does: a correlation
             // pairs exactly two trackers, the merge types (line/bar/calendar) take one or
@@ -95,7 +112,7 @@ namespace Operum.Service.Services.Analytics
                     .Where(f => f.TrackerId == src.TrackerId)
                     .ToDictionaryAsync(f => f.Id);
 
-                var fieldMapResult = BuildFieldMap(dto.ResultType, dto.Code, src, trackerFields);
+                var fieldMapResult = BuildFieldMap(dto.ResultType, code, grouping, src, trackerFields);
                 if (!fieldMapResult.IsSuccess)
                     return Result.Failure(fieldMapResult.StatusCode, fieldMapResult.Messages);
 
@@ -114,7 +131,8 @@ namespace Operum.Service.Services.Analytics
                     Analytic = new Analytic
                     {
                         Id = $"explore-{i}",
-                        Code = isPaired ? AnalyticCodes.LineChart : dto.Code,
+                        Code = isPaired ? AnalyticCodes.RawValues : code,
+                        Grouping = isPaired ? AnalyticGroupings.None : grouping,
                         ResultType = isPaired ? AnalyticTypes.LineChart : dto.ResultType
                     },
                     Entries = entriesResult.Data,
@@ -144,9 +162,9 @@ namespace Operum.Service.Services.Analytics
         // set the code requires, each field must belong to the tracker, and its data type
         // must be one the code allows for that purpose.
         private static Result<Dictionary<string, Field>> BuildFieldMap(
-            string resultType, string code, EvaluateSourceDto src, IReadOnlyDictionary<string, Field> trackerFields)
+            string resultType, string code, string? grouping, EvaluateSourceDto src, IReadOnlyDictionary<string, Field> trackerFields)
         {
-            var requiredPurposes = AnalyticDefinitionList.GetRequiredPurposes(resultType, code);
+            var requiredPurposes = AnalyticDefinitionList.GetRequiredPurposes(resultType, code, grouping);
             var suppliedPurposes = src.Fields.Select(f => f.Purpose).ToList();
 
             if (suppliedPurposes.Count != suppliedPurposes.Distinct().Count() ||
@@ -161,7 +179,7 @@ namespace Operum.Service.Services.Analytics
                 if (!trackerFields.TryGetValue(field.FieldId, out var trackerField))
                     return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound($"field for purpose {field.Purpose}"));
 
-                if (!AnalyticDefinitionList.IsValidDataType(resultType, code, field.Purpose, trackerField.Type))
+                if (!AnalyticDefinitionList.IsValidDataType(resultType, code, field.Purpose, trackerField.Type, grouping))
                     return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("data type for purpose"));
 
                 map[field.Purpose] = trackerField;

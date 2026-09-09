@@ -1,4 +1,4 @@
-﻿namespace Operum.Model.Constants.Analytics
+namespace Operum.Model.Constants.Analytics
 {
     public static class AnalyticCodes
     {
@@ -16,37 +16,24 @@
         public const string FalseCount = "False Count";
         public const string TruePercentage = "True Percentage";
 
-        public const string AggregatedSumLineChart = "Aggregated Sum";
-        public const string CumulativeLineChart = "Cumulative Sum";
-        public const string LineChart = "Line Chart";
-        public const string DailyLineChart = "Daily";
-        public const string WeeklyLineChart = "Weekly";
-        public const string MonthlyLineChart = "Monthly";
-        public const string YearlyLineChart = "Yearly";
+        // Line/Bar aggregations. Sum/Average/Count/Min/Max above are shared with Single
+        // Value; these two are chart-only. The grouping a chart pairs one of these with is
+        // AnalyticGroupings.
+        public const string RawValues = "Raw Values";
+        public const string CumulativeSum = "Cumulative Sum";
 
         public const string ScatterChart = "Scatter Chart";
         public const string CorrelationScatter = "Correlation Scatter";
         public const string Calendar = "Calendar";
         public const string DonutChart = "Donut Chart";
 
-        public const string CountBarChart = "Count Bar Chart";
-        public const string SumBarChart = "Sum Bar Chart";
-        public const string AverageBarChart = "Average Bar Chart";
-        public const string DailyBarChart = "Daily Bar Chart";
-        public const string WeeklyBarChart = "Weekly Bar Chart";
-        public const string MonthlyBarChart = "Monthly Bar Chart";
-        public const string YearlyBarChart = "Yearly Bar Chart";
-
         public static readonly HashSet<string> All =
         [
             Count, Min, Max, Average, Sum, StdDev,
             CountDistinct, MostCommon, LeastCommon,
             TrueCount, FalseCount, TruePercentage,
-            AggregatedSumLineChart, CumulativeLineChart, LineChart,
-            DailyLineChart, WeeklyLineChart, MonthlyLineChart, YearlyLineChart,
-            Calendar, ScatterChart, CorrelationScatter, DonutChart,
-            CountBarChart, SumBarChart, AverageBarChart,
-            DailyBarChart, WeeklyBarChart, MonthlyBarChart, YearlyBarChart
+            RawValues, CumulativeSum,
+            Calendar, ScatterChart, CorrelationScatter, DonutChart
         ];
 
         public static bool IsValid(string op) => All.Contains(op);

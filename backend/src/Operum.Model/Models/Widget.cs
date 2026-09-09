@@ -16,6 +16,11 @@ namespace Operum.Model.Models
         public string ResultType { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
 
+        // Line/Bar only: how the axis field is bucketed before Code aggregates each bucket
+        // (see AnalyticGroupings). Null for every other result type, whose calculation is
+        // the Code alone.
+        public string? Grouping { get; set; }
+
         // Combined charts only: restricts the chart to the x-axis values every source has
         // a point for. Ignored by a single-source widget.
         public bool MatchedValuesOnly { get; set; }

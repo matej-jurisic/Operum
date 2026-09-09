@@ -32,6 +32,8 @@ export interface PromoteSource {
 
 interface Props {
     resultType: string;
+    /** Line/Bar only: how the axis field is bucketed before the code aggregates it. */
+    grouping?: string;
     code: string;
     matchedValuesOnly: boolean;
     sources: PromoteSource[];
@@ -46,6 +48,7 @@ type OpenModal = "dashboard" | "widget" | null;
     dashboard path first saves each source's inline filters as a view on its tracker. */
 export function PromoteControls({
     resultType,
+    grouping,
     code,
     matchedValuesOnly,
     sources,
@@ -117,6 +120,7 @@ export function PromoteControls({
             await dashboardController.createAndPlaceWidget(dashboardId, {
                 name: name.trim() || undefined,
                 resultType,
+                grouping,
                 code,
                 matchedValuesOnly,
                 sources: sources.map((s, i) => ({
@@ -143,6 +147,7 @@ export function PromoteControls({
             await widgetsController.createWidget({
                 name: name.trim() || undefined,
                 resultType,
+                grouping,
                 code,
                 matchedValuesOnly,
                 sources: sources.map((s) => ({

@@ -338,7 +338,8 @@ namespace Operum.Service.Services.Dashboards
                         Analytic = new Analytic
                         {
                             Id = source.Id,
-                            Code = isPaired ? AnalyticCodes.LineChart : item.Widget.Code,
+                            Code = isPaired ? AnalyticCodes.RawValues : item.Widget.Code,
+                            Grouping = isPaired ? AnalyticGroupings.None : item.Widget.Grouping,
                             ResultType = isPaired ? AnalyticTypes.LineChart : item.Widget.ResultType,
                             // Goal widgets only; ignored by every other builder.
                             GoalTarget = goalTarget
@@ -481,6 +482,7 @@ namespace Operum.Service.Services.Dashboards
                 Description = dto.Description,
                 ResultType = dto.ResultType,
                 Code = dto.Code,
+                Grouping = dto.Grouping,
                 MatchedValuesOnly = dto.MatchedValuesOnly,
                 GoalTarget = dto.GoalTarget,
                 Sources = dto.Sources.Select(s => new CreateWidgetSourceRequestDto
@@ -625,7 +627,7 @@ namespace Operum.Service.Services.Dashboards
                 return new DashboardItemSourceDto
                 {
                     Id = s.Id,
-                    Name = AnalyticDefinitionList.GetDisplayName(widget.ResultType, widget.Code, fields.Select(f => f.Field.Name)),
+                    Name = AnalyticDefinitionList.GetDisplayName(widget.ResultType, widget.Code, fields.Select(f => f.Field.Name), widget.Grouping),
                     Fields = fields.Select(f => new DashboardItemSourceFieldDto { Purpose = f.Purpose, FieldId = f.FieldId, FieldName = f.Field.Name }).ToList(),
                     TrackerId = widgetSource.TrackerId,
                     TrackerName = widgetSource.Tracker.Name,
@@ -645,6 +647,7 @@ namespace Operum.Service.Services.Dashboards
                 Config = item.Config,
                 ResultType = widget.ResultType,
                 Code = widget.Code,
+                Grouping = widget.Grouping,
                 MatchedValuesOnly = widget.MatchedValuesOnly,
                 YAxisFromZero = item.YAxisFromZero,
                 Sources = sourceDtos
@@ -1879,6 +1882,7 @@ namespace Operum.Service.Services.Dashboards
             TrackerIds = ResolveItemTrackerIds(item),
             ResultType = item.Widget?.ResultType ?? string.Empty,
             Code = item.Widget?.Code ?? string.Empty,
+            Grouping = item.Widget?.Grouping,
             MatchedValuesOnly = item.Widget?.MatchedValuesOnly ?? false,
             YAxisFromZero = item.YAxisFromZero,
             GoalConditionalTargets = ParseGoalConditionalTargets(item.GoalConditionalTargets),
@@ -1905,7 +1909,7 @@ namespace Operum.Service.Services.Dashboards
                 .Where(f => f.Field != null)
                 .Select(f => f.Field.Name) ?? [];
 
-            return AnalyticDefinitionList.GetDisplayName(item.Widget.ResultType, item.Widget.Code, fieldNames);
+            return AnalyticDefinitionList.GetDisplayName(item.Widget.ResultType, item.Widget.Code, fieldNames, item.Widget.Grouping);
         }
 
         // Every tracker this item reads from — one for an Entries widget, the distinct set
@@ -2257,7 +2261,7 @@ namespace Operum.Service.Services.Dashboards
             return new DashboardItemSourceDto
             {
                 Id = s.Id,
-                Name = AnalyticDefinitionList.GetDisplayName(item.Widget.ResultType, item.Widget.Code, fields.Select(f => f.Field.Name)),
+                Name = AnalyticDefinitionList.GetDisplayName(item.Widget.ResultType, item.Widget.Code, fields.Select(f => f.Field.Name), item.Widget.Grouping),
                 Fields = fields
                     .Select(f => new DashboardItemSourceFieldDto { Purpose = f.Purpose, FieldId = f.FieldId, FieldName = f.Field.Name })
                     .ToList(),

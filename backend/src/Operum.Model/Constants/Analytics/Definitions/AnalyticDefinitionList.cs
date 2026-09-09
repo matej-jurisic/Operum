@@ -4,6 +4,39 @@ namespace Operum.Model.Constants.Analytics.Definitions
 {
     public static class AnalyticDefinitionList
     {
+        // Number/duration value fields: every Line/Bar aggregation except Count reads one.
+        private static readonly HashSet<string> Numeric = [DataTypes.Number, DataTypes.TimeSpan];
+
+        // The aggregations offered for a bucketed Line grouping (Exact / Daily / ...).
+        private static readonly HashSet<string> LineBucketCodes =
+        [
+            AnalyticCodes.Sum, AnalyticCodes.Average, AnalyticCodes.Count,
+            AnalyticCodes.Min, AnalyticCodes.Max, AnalyticCodes.CumulativeSum
+        ];
+
+        // Same for a Bar grouping -- no raw and no cumulative.
+        private static readonly HashSet<string> BarBucketCodes =
+        [
+            AnalyticCodes.Sum, AnalyticCodes.Average, AnalyticCodes.Count,
+            AnalyticCodes.Min, AnalyticCodes.Max
+        ];
+
+        private static AnalyticPurposeDataTypes Agg(string valuePurpose, HashSet<string>? valueTypes) => new()
+        {
+            AllowedDataTypes = valueTypes == null
+                ? []
+                : new() { [valuePurpose] = valueTypes }
+        };
+
+        private static Dictionary<string, AnalyticGrouping> DateBucketGroupings(HashSet<string> codes) =>
+            new()
+            {
+                [AnalyticGroupings.Daily] = new() { Label = "Daily", AllowedAxisTypes = [DataTypes.Date, DataTypes.DateTime], AllowedCodes = codes },
+                [AnalyticGroupings.Weekly] = new() { Label = "Weekly", AllowedAxisTypes = [DataTypes.Date, DataTypes.DateTime], AllowedCodes = codes },
+                [AnalyticGroupings.Monthly] = new() { Label = "Monthly", AllowedAxisTypes = [DataTypes.Date, DataTypes.DateTime], AllowedCodes = codes },
+                [AnalyticGroupings.Yearly] = new() { Label = "Yearly", AllowedAxisTypes = [DataTypes.Date, DataTypes.DateTime], AllowedCodes = codes },
+            };
+
         public static readonly Dictionary<string, AnalyticDefinition> ByResultType =
             new()
             {
@@ -196,144 +229,62 @@ namespace Operum.Model.Constants.Analytics.Definitions
                     }
                 },
 
+                // Line and Bar: the calculation is a (Grouping, Code) pair. Grouping buckets
+                // the axis field (X-axis / Name); Code aggregates each bucket. See
+                // AnalyticGroupings and the *AnalyticBuilder processors.
                 [AnalyticTypes.LineChart] = new AnalyticDefinition
                 {
                     Purposes = [AnalyticPurposes.Xaxis, AnalyticPurposes.Yaxis],
+                    GroupingPurpose = AnalyticPurposes.Xaxis,
+                    AxisNoun = "value",
                     Codes = new()
                     {
-                        [AnalyticCodes.AggregatedSumLineChart] = new AnalyticPurposeDataTypes
+                        [AnalyticCodes.RawValues] = Agg(AnalyticPurposes.Yaxis, Numeric),
+                        [AnalyticCodes.Sum] = Agg(AnalyticPurposes.Yaxis, Numeric),
+                        [AnalyticCodes.Average] = Agg(AnalyticPurposes.Yaxis, Numeric),
+                        [AnalyticCodes.Count] = Agg(AnalyticPurposes.Yaxis, null),
+                        [AnalyticCodes.Min] = Agg(AnalyticPurposes.Yaxis, Numeric),
+                        [AnalyticCodes.Max] = Agg(AnalyticPurposes.Yaxis, Numeric),
+                        [AnalyticCodes.CumulativeSum] = Agg(AnalyticPurposes.Yaxis, Numeric),
+                    },
+                    Groupings = new(DateBucketGroupings(LineBucketCodes))
+                    {
+                        [AnalyticGroupings.None] = new()
                         {
-                            Label = "Sum by Category",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Xaxis] = [.. DataTypes.All],
-                                [AnalyticPurposes.Yaxis] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
+                            Label = "None",
+                            AllowedAxisTypes = [.. DataTypes.All],
+                            AllowedCodes = [AnalyticCodes.RawValues]
                         },
-                        [AnalyticCodes.CumulativeLineChart] = new AnalyticPurposeDataTypes
+                        [AnalyticGroupings.Exact] = new()
                         {
-                            Label = "Cumulative Sum",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Xaxis] = [.. DataTypes.All],
-                                [AnalyticPurposes.Yaxis] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
+                            Label = "By value",
+                            AllowedAxisTypes = [.. DataTypes.All],
+                            AllowedCodes = LineBucketCodes
                         },
-                        [AnalyticCodes.LineChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Raw Values",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Xaxis] = [.. DataTypes.All],
-                                [AnalyticPurposes.Yaxis] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.DailyLineChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Daily Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Xaxis] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Yaxis] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.WeeklyLineChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Weekly Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Xaxis] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Yaxis] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.MonthlyLineChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Monthly Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Xaxis] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Yaxis] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.YearlyLineChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Yearly Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Xaxis] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Yaxis] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        }
                     }
                 },
 
                 [AnalyticTypes.BarChart] = new AnalyticDefinition
                 {
                     Purposes = [AnalyticPurposes.Name, AnalyticPurposes.Value],
+                    GroupingPurpose = AnalyticPurposes.Name,
+                    AxisNoun = "category",
                     Codes = new()
                     {
-                        [AnalyticCodes.CountBarChart] = new AnalyticPurposeDataTypes
+                        [AnalyticCodes.Sum] = Agg(AnalyticPurposes.Value, Numeric),
+                        [AnalyticCodes.Average] = Agg(AnalyticPurposes.Value, Numeric),
+                        [AnalyticCodes.Count] = Agg(AnalyticPurposes.Value, null),
+                        [AnalyticCodes.Min] = Agg(AnalyticPurposes.Value, Numeric),
+                        [AnalyticCodes.Max] = Agg(AnalyticPurposes.Value, Numeric),
+                    },
+                    Groupings = new(DateBucketGroupings(BarBucketCodes))
+                    {
+                        [AnalyticGroupings.Exact] = new()
                         {
-                            Label = "Count per Category",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Name] = [.. DataTypes.All]
-                            }
+                            Label = "By category",
+                            AllowedAxisTypes = [.. DataTypes.All],
+                            AllowedCodes = BarBucketCodes
                         },
-                        [AnalyticCodes.SumBarChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Sum per Category",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Name] = [.. DataTypes.All],
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.AverageBarChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Average per Category",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Name] = [.. DataTypes.All],
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.DailyBarChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Daily Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Name] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.WeeklyBarChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Weekly Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Name] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.MonthlyBarChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Monthly Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Name] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        },
-                        [AnalyticCodes.YearlyBarChart] = new AnalyticPurposeDataTypes
-                        {
-                            Label = "Yearly Totals",
-                            AllowedDataTypes = new()
-                            {
-                                [AnalyticPurposes.Name] = [DataTypes.Date, DataTypes.DateTime],
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan]
-                            }
-                        }
                     }
                 },
 
@@ -403,48 +354,127 @@ namespace Operum.Model.Constants.Analytics.Definitions
             };
 
 
-        public static bool IsValidForType(string resultType, string code) =>
-            ByResultType.TryGetValue(resultType, out var def) && def.Codes.ContainsKey(code);
+        // Whether a calculation is valid for a result type. For Line/Bar this is the
+        // (grouping, code) pair; for everything else grouping must be absent and the code
+        // must be one the type defines.
+        public static bool IsValidForType(string resultType, string code, string? grouping = null)
+        {
+            if (!ByResultType.TryGetValue(resultType, out var def))
+                return false;
+
+            if (def.UsesGrouping)
+                return !string.IsNullOrEmpty(grouping)
+                    && def.Groupings.TryGetValue(grouping, out var g)
+                    && g.AllowedCodes.Contains(code);
+
+            return string.IsNullOrEmpty(grouping) && def.Codes.ContainsKey(code);
+        }
 
         public static bool SupportsPurpose(string resultType, string purpose) =>
             ByResultType.TryGetValue(resultType, out var def) && def.Purposes.Contains(purpose);
 
-        public static bool IsValidDataType(string resultType, string code, string purpose, string dataType) =>
-            ByResultType.TryGetValue(resultType, out var def) &&
-            def.Codes.TryGetValue(code, out var codeDef) &&
-            codeDef.AllowedDataTypes.TryGetValue(purpose, out var allowed) &&
-            allowed.Contains(dataType);
-
-        // The purposes a given code needs mapped to a field. AllowedDataTypes is keyed by
-        // purpose and only lists the ones that code actually uses, so its keys are exactly
-        // the required set (e.g. "Count per Category" needs Name but not Value).
-        public static IReadOnlyCollection<string> GetRequiredPurposes(string resultType, string code) =>
-            ByResultType.TryGetValue(resultType, out var def) &&
-            def.Codes.TryGetValue(code, out var codeDef)
-                ? codeDef.AllowedDataTypes.Keys
-                : [];
-
-        // The human-readable name for an analytic, e.g. "Line Chart · Monthly Totals: Day,
-        // Amount". Leads with the chart type because a calculation label alone doesn't
-        // always identify the analytic: Bar and Donut both call their per-category sum "Sum
-        // per Category", and "Single Value · Average" reads very differently from "Line
-        // Chart · Average" once it's sitting in a list next to other widgets. Skipped when
-        // it would just repeat the calculation (e.g. Calendar's only code is also called
-        // "Calendar"). Shared by tracker analytic summaries and dashboard sources so a saved
-        // and an ad hoc analytic with the same definition read identically.
-        public static string GetDisplayName(string resultType, string code, IEnumerable<string> fieldNames)
+        // Whether a field of <paramref name="dataType"/> may fill <paramref name="purpose"/>
+        // for this calculation. The grouping purpose is constrained by the grouping; every
+        // other purpose by the code.
+        public static bool IsValidDataType(string resultType, string code, string purpose, string dataType, string? grouping = null)
         {
-            var label = GetLabel(resultType, code);
+            if (!ByResultType.TryGetValue(resultType, out var def))
+                return false;
+
+            if (def.UsesGrouping && purpose == def.GroupingPurpose)
+                return !string.IsNullOrEmpty(grouping)
+                    && def.Groupings.TryGetValue(grouping, out var g)
+                    && g.AllowedAxisTypes.Contains(dataType);
+
+            return def.Codes.TryGetValue(code, out var codeDef) &&
+                codeDef.AllowedDataTypes.TryGetValue(purpose, out var allowed) &&
+                allowed.Contains(dataType);
+        }
+
+        // The purposes a given calculation needs mapped to a field. For a grouping type
+        // that's the grouping purpose plus whatever the aggregation reads (nothing, for
+        // Count); for everything else it's exactly the keys of the code's AllowedDataTypes.
+        public static IReadOnlyCollection<string> GetRequiredPurposes(string resultType, string code, string? grouping = null)
+        {
+            if (!ByResultType.TryGetValue(resultType, out var def) || !def.Codes.TryGetValue(code, out var codeDef))
+                return [];
+
+            if (!def.UsesGrouping)
+                return codeDef.AllowedDataTypes.Keys;
+
+            return [def.GroupingPurpose, .. codeDef.AllowedDataTypes.Keys];
+        }
+
+        // The human-readable name for an analytic, e.g. "Line Chart · Weekly average: Day,
+        // Amount". Leads with the chart type because a calculation label alone doesn't
+        // always identify the analytic. Skipped when it would just repeat the calculation
+        // (e.g. Calendar's only code is also called "Calendar"). Shared by widget summaries
+        // and dashboard sources so a saved and an ad hoc analytic with the same definition
+        // read identically.
+        public static string GetDisplayName(string resultType, string code, IEnumerable<string> fieldNames, string? grouping = null)
+        {
+            var label = GetLabel(resultType, code, grouping);
             var names = fieldNames.Where(n => !string.IsNullOrEmpty(n)).ToList();
             var calculation = names.Count > 0 ? $"{label}: {string.Join(", ", names)}" : label;
             return label == resultType ? calculation : $"{resultType} · {calculation}";
         }
 
-        public static string GetLabel(string resultType, string code) =>
-            ByResultType.TryGetValue(resultType, out var def) &&
-            def.Codes.TryGetValue(code, out var codeDef) &&
-            !string.IsNullOrEmpty(codeDef.Label)
+        // The bare aggregation label for a Line/Bar code, for the "Calculation" dropdown
+        // (the composed name with the grouping is built by the form).
+        public static string GetAggregationLabel(string code) => code switch
+        {
+            AnalyticCodes.RawValues => "Raw values",
+            AnalyticCodes.Sum => "Sum",
+            AnalyticCodes.Average => "Average",
+            AnalyticCodes.Count => "Count",
+            AnalyticCodes.Min => "Minimum",
+            AnalyticCodes.Max => "Maximum",
+            AnalyticCodes.CumulativeSum => "Cumulative sum",
+            _ => code
+        };
+
+        public static string GetLabel(string resultType, string code, string? grouping = null)
+        {
+            if (!ByResultType.TryGetValue(resultType, out var def))
+                return code;
+
+            if (def.UsesGrouping)
+                return ComposeGroupedLabel(def, grouping, code);
+
+            return def.Codes.TryGetValue(code, out var codeDef) && !string.IsNullOrEmpty(codeDef.Label)
                 ? codeDef.Label
                 : code;
+        }
+
+        // "Raw values", "Daily total", "Weekly average", "Count per category", "Cumulative
+        // total per value".
+        private static string ComposeGroupedLabel(AnalyticDefinition def, string? grouping, string code)
+        {
+            if (code == AnalyticCodes.RawValues)
+                return "Raw values";
+
+            var agg = code switch
+            {
+                AnalyticCodes.Sum => "total",
+                AnalyticCodes.Average => "average",
+                AnalyticCodes.Count => "count",
+                AnalyticCodes.Min => "minimum",
+                AnalyticCodes.Max => "maximum",
+                AnalyticCodes.CumulativeSum => "cumulative total",
+                _ => code.ToLowerInvariant()
+            };
+
+            var composed = grouping switch
+            {
+                AnalyticGroupings.Exact => $"{agg} per {def.AxisNoun}",
+                AnalyticGroupings.Daily => $"Daily {agg}",
+                AnalyticGroupings.Weekly => $"Weekly {agg}",
+                AnalyticGroupings.Monthly => $"Monthly {agg}",
+                AnalyticGroupings.Yearly => $"Yearly {agg}",
+                _ => agg
+            };
+
+            return char.ToUpperInvariant(composed[0]) + composed[1..];
+        }
     }
 }

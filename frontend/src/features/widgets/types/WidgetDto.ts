@@ -26,6 +26,8 @@ export interface WidgetDto {
     description?: string;
     resultType: string;
     code: string;
+    /** Line/Bar only: how the axis field is bucketed before the code aggregates it. */
+    grouping?: string;
     /** Combined charts only: whether the chart is restricted to x-axis values shared by
         every source. */
     matchedValuesOnly: boolean;
@@ -54,6 +56,8 @@ export interface CreateWidgetDto {
     description?: string;
     resultType: string;
     code: string;
+    /** Line/Bar only: how the axis field is bucketed before the code aggregates it. */
+    grouping?: string;
     matchedValuesOnly?: boolean;
     /** Goal widgets only, and required for them: a number or an hh:mm:ss duration. */
     goalTarget?: string;

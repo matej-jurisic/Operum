@@ -9,14 +9,51 @@ export interface CodeDto {
     purposes: PurposeDto[];
 }
 
+/** Line/Bar only: one grouping option and the aggregation codes it allows. */
+export interface GroupingDto {
+    grouping: string;
+    name: string;
+    /** Field types the grouping purpose accepts under this grouping. */
+    allowedDataTypes: string[];
+    /** Aggregation codes valid with this grouping. */
+    allowedCodes: string[];
+}
+
 export interface ResultTypeDto {
     name: string;
     /** True for result types only offered when building a saved widget (a Goal), not in
         Explore or a notification condition. */
     widgetOnly: boolean;
     codes: CodeDto[];
+    /** Line/Bar only: the calculation is a (grouping, code) pair. Empty for every other
+        result type. */
+    groupings: GroupingDto[];
+    /** Line/Bar only: the purpose the grouping constrains (its field types come from the
+        chosen grouping, not the code). "" for every other result type. */
+    groupingPurpose: string;
 }
 
 export interface AnalyticConfigDto {
     resultTypes: ResultTypeDto[];
+}
+
+/** Whether this result type's calculation is a (grouping, code) pair rather than a bare
+    code. */
+export const usesGrouping = (rt: ResultTypeDto | undefined): boolean =>
+    !!rt && rt.groupings.length > 0;
+
+/** The field-mapping purposes for a chosen (grouping, code): the grouping purpose (with
+    the grouping's field types) followed by whatever the aggregation reads. */
+export function effectivePurposes(
+    rt: ResultTypeDto | undefined,
+    grouping: GroupingDto | undefined,
+    code: CodeDto | undefined,
+): PurposeDto[] {
+    if (!rt) return [];
+    const base = code?.purposes ?? [];
+    if (!rt.groupingPurpose || !grouping) return base;
+    return [
+        { name: rt.groupingPurpose, allowedDataTypes: grouping.allowedDataTypes },
+        ...base,
+    ];
 }

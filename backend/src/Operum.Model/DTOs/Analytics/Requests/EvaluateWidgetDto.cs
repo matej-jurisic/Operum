@@ -35,6 +35,11 @@ namespace Operum.Model.DTOs.Analytics.Requests
         public string ResultType { get; set; } = string.Empty;
         public string Code { get; set; } = string.Empty;
 
+        // Line/Bar only: how the axis field is bucketed before Code aggregates it (see
+        // AnalyticGroupings). Null/empty for every other result type; a legacy fused code
+        // with no grouping is resolved server-side (LegacyLineBarCodes).
+        public string? Grouping { get; set; }
+
         // Combined charts only: keep just the x-axis values every source has a point for.
         // Ignored for a single source or a paired correlation.
         public bool MatchedValuesOnly { get; set; }
@@ -66,9 +71,16 @@ namespace Operum.Model.DTOs.Analytics.Requests
                 .NotEmpty().WithMessage(x => Messages.Required("result type"))
                 .Must(AnalyticTypes.IsValid).WithMessage(x => Messages.Invalid("result type"));
 
+            // A legacy fused Line/Bar code (from a bookmarked Explore URL) passes the shape
+            // check here and is rewritten to (Grouping, Code) in AnalyticsService.
             RuleFor(x => x.Code)
                 .NotEmpty().WithMessage(x => Messages.Required("code"))
-                .Must(AnalyticCodes.IsValid).WithMessage(x => Messages.Invalid("code"));
+                .Must(c => AnalyticCodes.IsValid(c) || LegacyLineBarCodes.Map.ContainsKey(c))
+                .WithMessage(x => Messages.Invalid("code"));
+
+            RuleFor(x => x.Grouping)
+                .Must(g => string.IsNullOrEmpty(g) || AnalyticGroupings.IsValid(g))
+                .WithMessage(x => Messages.Invalid("grouping"));
 
             RuleFor(x => x.Sources)
                 .NotEmpty().WithMessage(x => Messages.Required("sources"))

@@ -52,7 +52,7 @@ namespace Operum.Service.Services.Widgets
             if (dto.Sources.Count == 0 || dto.Sources.Count > DataLimits.MaxDashboardItemSourceCount)
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.MaxNumberReached("widget sources", DataLimits.MaxDashboardItemSourceCount));
 
-            if (!AnalyticDefinitionList.IsValidForType(dto.ResultType, dto.Code))
+            if (!AnalyticDefinitionList.IsValidForType(dto.ResultType, dto.Code, dto.Grouping))
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("code for this result type"));
 
             // A Goal is a single-source Single Value calculation plus a target. The target is
@@ -93,7 +93,7 @@ namespace Operum.Service.Services.Widgets
                     TrackerId = sourceDto.TrackerId
                 };
 
-                var fieldsResult = await BuildSourceFields(dto.ResultType, dto.Code, sourceDto, source);
+                var fieldsResult = await BuildSourceFields(dto.ResultType, dto.Code, dto.Grouping, sourceDto, source);
                 if (!fieldsResult.IsSuccess)
                     return Result.Failure(fieldsResult.StatusCode, fieldsResult.Messages);
 
@@ -120,6 +120,7 @@ namespace Operum.Service.Services.Widgets
                 Description = dto.Description?.Trim() ?? string.Empty,
                 ResultType = dto.ResultType,
                 Code = dto.Code,
+                Grouping = string.IsNullOrEmpty(dto.Grouping) ? null : dto.Grouping,
                 MatchedValuesOnly = dto.MatchedValuesOnly,
                 GoalTarget = goalTarget,
                 OwnerId = user.Id,
@@ -266,9 +267,9 @@ namespace Operum.Service.Services.Widgets
         // if it holds up, fills source.Fields. Mirrors DashboardService.BuildSourceFields --
         // kept separate rather than shared because the two operate on different entity types
         // (WidgetSource vs DashboardItemSource) until Phase B3 unifies the placement path.
-        private async Task<Result> BuildSourceFields(string resultType, string code, CreateWidgetSourceRequestDto dto, WidgetSource source)
+        private async Task<Result> BuildSourceFields(string resultType, string code, string? grouping, CreateWidgetSourceRequestDto dto, WidgetSource source)
         {
-            var requiredPurposes = AnalyticDefinitionList.GetRequiredPurposes(resultType, code);
+            var requiredPurposes = AnalyticDefinitionList.GetRequiredPurposes(resultType, code, grouping);
             var suppliedPurposes = dto.Fields.Select(f => f.Purpose).ToList();
 
             if (suppliedPurposes.Count != suppliedPurposes.Distinct().Count() ||
@@ -285,7 +286,7 @@ namespace Operum.Service.Services.Widgets
                 if (trackerField == null)
                     return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound($"field for purpose {field.Purpose}"));
 
-                if (!AnalyticDefinitionList.IsValidDataType(resultType, code, field.Purpose, trackerField.Type))
+                if (!AnalyticDefinitionList.IsValidDataType(resultType, code, field.Purpose, trackerField.Type, grouping))
                     return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("data type for purpose"));
 
                 source.Fields.Add(new WidgetSourceField
@@ -329,10 +330,11 @@ namespace Operum.Service.Services.Widgets
         private static WidgetDto MapToDto(Widget w) => new()
         {
             Id = w.Id,
-            Name = string.IsNullOrWhiteSpace(w.Name) ? AnalyticDefinitionList.GetLabel(w.ResultType, w.Code) : w.Name,
+            Name = string.IsNullOrWhiteSpace(w.Name) ? AnalyticDefinitionList.GetLabel(w.ResultType, w.Code, w.Grouping) : w.Name,
             Description = w.Description,
             ResultType = w.ResultType,
             Code = w.Code,
+            Grouping = w.Grouping,
             MatchedValuesOnly = w.MatchedValuesOnly,
             GoalTarget = w.GoalTarget,
             Sources = w.Sources.OrderBy(s => s.Order).Select(s => MapSourceToDto(w, s)).ToList()
@@ -345,7 +347,7 @@ namespace Operum.Service.Services.Widgets
             return new WidgetSourceDto
             {
                 Id = s.Id,
-                Name = AnalyticDefinitionList.GetDisplayName(w.ResultType, w.Code, fields.Select(f => f.Field.Name)),
+                Name = AnalyticDefinitionList.GetDisplayName(w.ResultType, w.Code, fields.Select(f => f.Field.Name), w.Grouping),
                 Fields = fields
                     .Select(f => new WidgetSourceFieldDto { Purpose = f.Purpose, FieldId = f.FieldId, FieldName = f.Field.Name })
                     .ToList(),
