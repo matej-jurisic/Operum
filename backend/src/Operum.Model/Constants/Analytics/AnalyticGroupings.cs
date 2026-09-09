@@ -5,7 +5,8 @@ namespace Operum.Model.Constants.Analytics
     // a grouping; every other result type's calculation is the aggregation code alone.
     public static class AnalyticGroupings
     {
-        // Line only: plot every entry as its own point, no bucketing and no aggregation.
+        // Plot every entry as its own mark, no bucketing and no aggregation: a point on a
+        // Line, a bar on a Bar chart.
         public const string None = "None";
 
         // One bucket per distinct field value.

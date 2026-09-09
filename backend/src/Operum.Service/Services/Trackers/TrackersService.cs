@@ -24,7 +24,9 @@ namespace Operum.Service.Services.Trackers
         public async Task<Result<TrackerDto>> CreateTracker(CreateTrackerDto tracker)
         {
             var user = currentUserService.GetCurrentUser();
-            var trackerCount = await db.Trackers.Where(x => x.OwnerId == user.Id).CountAsync();
+            // Templates (non-null TrackerTypeId) are a separate class of tracker and don't
+            // count against a user's personal cap, the same exclusion the list queries make.
+            var trackerCount = await db.Trackers.Where(x => x.OwnerId == user.Id && x.TrackerTypeId == null).CountAsync();
             if (trackerCount >= DataLimits.MaxTrackerCount)
             {
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.MaxNumberReached("trackers", DataLimits.MaxTrackerCount));

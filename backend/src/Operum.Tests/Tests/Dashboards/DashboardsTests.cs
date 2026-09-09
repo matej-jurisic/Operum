@@ -1149,6 +1149,59 @@ namespace Operum.Tests.Tests.Dashboards
             Assert.Equal(9, points["Strength"]);
         }
 
+        // Raw values (the None grouping): one bar per entry, no bucketing and no
+        // aggregation, the same as the line chart's raw values.
+        [Fact]
+        public async Task RawValuesBarChart_PlotsOneBarPerEntry_WithNoAggregation()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("rawvaluesbar");
+
+            // Seeded: Category "Cardio", Amount 5. Add a second Cardio and a Strength: raw
+            // values keeps all three, including the two that share a category.
+            var tracker = await CreateCapableTracker(client, "Weight");
+            await client.PostAsJsonAsync($"trackers/{tracker.Id}/entries", new CreateEntryDto
+            {
+                FieldValues = new() { ["Day"] = "2026-01-02", ["Amount"] = "2", ["Category"] = "Cardio" }
+            });
+            await client.PostAsJsonAsync($"trackers/{tracker.Id}/entries", new CreateEntryDto
+            {
+                FieldValues = new() { ["Day"] = "2026-01-03", ["Amount"] = "9", ["Category"] = "Strength" }
+            });
+
+            var dashboardId = await CreateDashboard(client);
+            var response = await client.PostAsJsonAsync($"dashboard/{dashboardId}/items", new CreateAndPlaceWidgetDto
+            {
+                ResultType = AnalyticTypes.BarChart,
+                Code = AnalyticCodes.RawValues,
+                Grouping = AnalyticGroupings.None,
+                Sources =
+                [
+                    new CreateAndPlaceWidgetSourceDto
+                    {
+                        TrackerId = tracker.Id,
+                        AnalyticFields =
+                        [
+                            new CreateAnalyticFieldDto { FieldId = tracker.CategoryFieldId, Purpose = AnalyticPurposes.Name },
+                            new CreateAnalyticFieldDto { FieldId = tracker.AmountFieldId, Purpose = AnalyticPurposes.Value }
+                        ]
+                    }
+                ]
+            });
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var chartId = (await Data(response)).GetProperty("id").GetString()!;
+
+            var points = Analytic(ChartFor(await Widgets(client, dashboardId), chartId)).GetProperty("points");
+            Assert.Equal(3, points.GetArrayLength());
+            var values = points.EnumerateArray()
+                .Select(p => (p.GetProperty("name").GetString()!, p.GetProperty("value").GetDouble()))
+                .ToList();
+            Assert.Equal(2, values.Count(v => v.Item1 == "Cardio"));
+            Assert.Contains(("Cardio", 5d), values);
+            Assert.Contains(("Cardio", 2d), values);
+            Assert.Contains(("Strength", 9d), values);
+        }
+
         [Fact]
         public async Task PlaceWidget_UnknownWidget_ReturnsNotFound()
         {

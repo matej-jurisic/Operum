@@ -16,7 +16,7 @@
         // OperumContext.OnModelCreating are what keep that affordable; raising this
         // further without measuring those queries first is not safe.
         public const int MaxEntryCount = 25000;
-        public const int MaxTrackerCount = 20;
+        public const int MaxTrackerCount = 30;
         // Connections a user may hold at once, and trackers one connection may feed. Both are
         // generous for the real use -- a person has one intervals.icu account and points it at
         // a tracker or two -- and exist so a scripted client cannot open them without bound.

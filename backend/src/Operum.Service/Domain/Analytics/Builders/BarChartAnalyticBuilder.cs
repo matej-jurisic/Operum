@@ -30,7 +30,7 @@ namespace Operum.Service.Domain.Analytics.Builders
                 return Result.Success<AnalyticDto>(result);
 
             // Count is the only aggregation that reads no value field: each row in a bucket
-            // counts once. Every other one needs a value field.
+            // counts once. Every other one, raw values included, needs a value field.
             var countsRows = code == AnalyticCodes.Count;
             var valueField = request.FieldMap.GetValueOrDefault(AnalyticPurposes.Value);
             if (valueField == null && !countsRows)
@@ -47,7 +47,11 @@ namespace Operum.Service.Domain.Analytics.Builders
                 .Where(p => p.Name != null && (countsRows || p.Value != null))
                 .ToList();
 
-            result.Points = new GroupedBarChartProcessor(grouping, code).Process(dataPoints);
+            IBarChartProcessor processor = code == AnalyticCodes.RawValues
+                ? new BarChartProcessor()
+                : new GroupedBarChartProcessor(grouping, code);
+
+            result.Points = processor.Process(dataPoints);
 
             if (valueField != null)
                 result.ValueField = new()

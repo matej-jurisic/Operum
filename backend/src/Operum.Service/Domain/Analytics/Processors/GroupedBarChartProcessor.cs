@@ -6,6 +6,7 @@ namespace Operum.Service.Domain.Analytics.Processors
     // Buckets a bar chart's points by the chosen grouping (exact category value, or a
     // calendar period) and reduces each bucket to one bar with the chosen aggregation.
     // Replaces the old per-combination processors (Count / Sum / Average / Daily / ...).
+    // Raw values (no grouping) stay on BarChartProcessor.
     public class GroupedBarChartProcessor(string grouping, string aggregation) : IBarChartProcessor
     {
         public List<DonutChartPointDto> Process(List<DonutChartPointDto> dataPoints)

@@ -14,7 +14,8 @@ namespace Operum.Model.Constants.Analytics.Definitions
             AnalyticCodes.Min, AnalyticCodes.Max, AnalyticCodes.CumulativeSum
         ];
 
-        // Same for a Bar grouping -- no raw and no cumulative.
+        // The aggregations offered for a bucketed Bar grouping (Exact / Daily / ...). No
+        // cumulative (a running total reads as a line); raw values are the None grouping only.
         private static readonly HashSet<string> BarBucketCodes =
         [
             AnalyticCodes.Sum, AnalyticCodes.Average, AnalyticCodes.Count,
@@ -271,6 +272,7 @@ namespace Operum.Model.Constants.Analytics.Definitions
                     AxisNoun = "category",
                     Codes = new()
                     {
+                        [AnalyticCodes.RawValues] = Agg(AnalyticPurposes.Value, Numeric),
                         [AnalyticCodes.Sum] = Agg(AnalyticPurposes.Value, Numeric),
                         [AnalyticCodes.Average] = Agg(AnalyticPurposes.Value, Numeric),
                         [AnalyticCodes.Count] = Agg(AnalyticPurposes.Value, null),
@@ -279,6 +281,12 @@ namespace Operum.Model.Constants.Analytics.Definitions
                     },
                     Groupings = new(DateBucketGroupings(BarBucketCodes))
                     {
+                        [AnalyticGroupings.None] = new()
+                        {
+                            Label = "None",
+                            AllowedAxisTypes = [.. DataTypes.All],
+                            AllowedCodes = [AnalyticCodes.RawValues]
+                        },
                         [AnalyticGroupings.Exact] = new()
                         {
                             Label = "By category",
