@@ -686,6 +686,28 @@ namespace Operum.Service.Services.Dashboards
             return Result.Success(MapToItemDto(item));
         }
 
+        // The placement a follower link names, if it is still on the board and is one of the
+        // kinds a filter can narrow. Analytic and Entries widgets read a tracker; nothing
+        // else on the board does, so nothing else can follow a filter.
+        private static DashboardItem? FollowerTarget(Dashboard dashboard, string itemId)
+        {
+            var item = dashboard.Items.FirstOrDefault(i => i.Id == itemId);
+
+            return item != null &&
+                (item.Type == DashboardWidgetTypes.Analytic || item.Type == DashboardWidgetTypes.Entries)
+                    ? item
+                    : null;
+        }
+
+        // Whether a follower link still points at something it can narrow: a placement on
+        // this board, reading the tracker the link maps its clauses onto. What each failure
+        // means is ValidateFollowerLinks' business -- this is only "does it still resolve".
+        private static bool LinkResolves(Dashboard dashboard, WidgetLinkDto link)
+        {
+            var target = FollowerTarget(dashboard, link.ItemId);
+            return target != null && ResolveItemTrackerIds(target).Contains(link.TrackerId);
+        }
+
         // Checks a Filter widget's follower links: every link names an Analytic/Entries
         // widget on this board, a tracker it reads from, and — for every clause it maps — a
         // real field of that tracker whose data type the clause allows. `label` is folded
@@ -707,9 +729,8 @@ namespace Operum.Service.Services.Dashboards
                 if (!seenLinks.Add($"{link.ItemId}|{link.TrackerId}"))
                     return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid($"duplicate {label} link"));
 
-                var target = dashboard.Items.FirstOrDefault(i => i.Id == link.ItemId);
-                if (target == null ||
-                    (target.Type != DashboardWidgetTypes.Analytic && target.Type != DashboardWidgetTypes.Entries))
+                var target = FollowerTarget(dashboard, link.ItemId);
+                if (target == null)
                     return Result.Failure(ResultStatusCodes.BadRequest, Messages.Invalid("widget to link"));
 
                 if (!ResolveItemTrackerIds(target).Contains(link.TrackerId))
@@ -776,6 +797,20 @@ namespace Operum.Service.Services.Dashboards
                 return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound("filter widget"));
 
             var previous = TryParseFilterConfig(item.Config);
+
+            // A link this widget already had can go stale without anything editing it: its
+            // follower leaves the board with the Widget it placed (deleted from the Library,
+            // or with its tracker), or stops reading the tracker the link names. The edit
+            // form resubmits the stored link list as-is, so one stale entry would otherwise
+            // fail the whole save -- drop those, and only those. A link that is new here and
+            // doesn't resolve is a real mistake and still fails below.
+            if (previous != null)
+            {
+                var carried = previous.Links.Select(l => $"{l.ItemId}|{l.TrackerId}").ToHashSet();
+                dto.Links = dto.Links
+                    .Where(l => LinkResolves(dashboard, l) || !carried.Contains($"{l.ItemId}|{l.TrackerId}"))
+                    .ToList();
+            }
 
             var built = await BuildFilterConfig(dashboard, user.Id, dto, previous?.Slots);
             if (!built.IsSuccess)
@@ -1586,6 +1621,20 @@ namespace Operum.Service.Services.Dashboards
                     child.Y += item.Y;
                     child.X = Math.Min(child.X, Math.Max(0, DashboardGrid.Columns - child.W));
                 }
+            }
+
+            // A filter widget names the placements that follow it by id, inside its own
+            // Config, where no foreign key can clean up after a delete. Nothing renders a
+            // link to a placement that is gone, but the next save of that filter widget
+            // resubmits its whole link list and gets rejected over the dangling one, so
+            // drop them here instead.
+            foreach (var filterItem in dashboard.Items.Where(i => i.Type == DashboardWidgetTypes.Filter))
+            {
+                var filterConfig = TryParseFilterConfig(filterItem.Config);
+                if (filterConfig == null || filterConfig.Links.RemoveAll(l => l.ItemId == item.Id) == 0)
+                    continue;
+
+                filterItem.Config = JsonSerializer.Serialize(filterConfig, ConfigJsonOptions);
             }
 
             // Removes only this placement. The shared Widget/EntriesWidget it referenced --

@@ -2160,6 +2160,15 @@ namespace Operum.Tests.Tests.Dashboards
 
         // The slot id of the filter widget's first clause -- the key SetFilterValues and a
         // goal's conditional targets expect, read back off the board.
+        // The raw Config JSON of one filter widget on the board.
+        private static string FilterConfig(JsonElement widgets, string filterId)
+        {
+            foreach (var w in widgets.EnumerateArray())
+                if (w.GetProperty("id").GetString() == filterId)
+                    return w.GetProperty("config").GetString()!;
+            throw new InvalidOperationException("filter widget not on the board");
+        }
+
         private static Task<string> FilterSlotId(HttpClient client, string dashboardId, string filterId) =>
             FilterSlotId(client, dashboardId, filterId, 0);
 
@@ -2263,6 +2272,137 @@ namespace Operum.Tests.Tests.Dashboards
             Assert.Equal(0, PointsOf(widgets, chartId));
             Assert.Equal(0, PointsOf(widgets, secondChartId));
             Assert.Equal(0, PointsOf(await Widgets(client, dashboardId), chartId));
+        }
+
+        [Fact]
+        public async Task RemoveItem_DroppingAFollowedWidget_ClearsItsLinkFromTheFilterWidget()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("filterlinkcleanup");
+
+            var tracker = await CreateCapableTracker(client, "Weight");
+            var dashboardId = await CreateDashboard(client);
+            var chartId = await PlaceLineChart(client, dashboardId, tracker);
+            var secondChartId = await PlaceLineChart(client, dashboardId, tracker);
+
+            WidgetLinkDto LinkTo(string itemId) => new()
+            {
+                ItemId = itemId,
+                TrackerId = tracker.Id,
+                FieldByQuery = new() { ["0"] = tracker.AmountFieldId }
+            };
+
+            var item = await Data(await client.PostAsJsonAsync(
+                $"dashboard/{dashboardId}/items/filter",
+                new SaveFilterItemDto
+                {
+                    Clauses = AmountOverClauses(),
+                    Links = [LinkTo(chartId), LinkTo(secondChartId)]
+                }));
+            var filterId = item.GetProperty("id").GetString()!;
+
+            var removed = await client.DeleteAsync($"dashboard/{dashboardId}/items/{chartId}");
+            Assert.Equal(HttpStatusCode.OK, removed.StatusCode);
+
+            // The removed placement is gone from the stored config, not just from the board:
+            // anything that resubmits this widget's links (adding a new widget that follows
+            // it, say) sends the list back verbatim and a dangling id would be rejected.
+            var config = FilterConfig(await Widgets(client, dashboardId), filterId);
+            Assert.DoesNotContain(chartId, config);
+            Assert.Contains(secondChartId, config);
+
+            var resaved = await client.PutAsJsonAsync(
+                $"dashboard/{dashboardId}/items/{filterId}/filter",
+                new SaveFilterItemDto
+                {
+                    Clauses = AmountOverClauses(),
+                    Links = [LinkTo(secondChartId)]
+                });
+            Assert.Equal(HttpStatusCode.OK, resaved.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateFilter_ResubmittingALinkToAWidgetThatIsGone_DropsItInsteadOfFailing()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("filterlinkselfheals");
+
+            var tracker = await CreateCapableTracker(client, "Weight");
+            var dashboardId = await CreateDashboard(client);
+            var widgetId = (await CreateWidget(client, tracker)).GetProperty("id").GetString()!;
+            var chartId = (await Data(await client.PostAsJsonAsync(
+                $"dashboard/{dashboardId}/items/place-widget",
+                new PlaceWidgetDto { WidgetId = widgetId }))).GetProperty("id").GetString()!;
+            var secondChartId = await PlaceLineChart(client, dashboardId, tracker);
+
+            WidgetLinkDto LinkTo(string itemId) => new()
+            {
+                ItemId = itemId,
+                TrackerId = tracker.Id,
+                FieldByQuery = new() { ["0"] = tracker.AmountFieldId }
+            };
+
+            var item = await Data(await client.PostAsJsonAsync(
+                $"dashboard/{dashboardId}/items/filter",
+                new SaveFilterItemDto
+                {
+                    Clauses = AmountOverClauses(),
+                    Links = [LinkTo(chartId), LinkTo(secondChartId)]
+                }));
+            var filterId = item.GetProperty("id").GetString()!;
+
+            // Deleting the definition from the Library cascades the placement off the board
+            // without going through RemoveDashboardItem, so the link is left dangling.
+            Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"widgets/{widgetId}")).StatusCode);
+
+            // The edit form resubmits the widget's stored links as they were. The dangling
+            // one is dropped rather than failing the save the other one rides in on.
+            var resaved = await client.PutAsJsonAsync(
+                $"dashboard/{dashboardId}/items/{filterId}/filter",
+                new SaveFilterItemDto
+                {
+                    Clauses = AmountOverClauses(),
+                    Links = [LinkTo(chartId), LinkTo(secondChartId)]
+                });
+            Assert.Equal(HttpStatusCode.OK, resaved.StatusCode);
+
+            var config = FilterConfig(await Widgets(client, dashboardId), filterId);
+            Assert.DoesNotContain(chartId, config);
+            Assert.Contains(secondChartId, config);
+        }
+
+        [Fact]
+        public async Task UpdateFilter_LinkingAWidgetThatIsNotOnTheBoard_StillFails()
+        {
+            await _factory.SeedDatabaseAsync();
+            var client = await _factory.NewUserClient("filterlinkstillvalidates");
+
+            var tracker = await CreateCapableTracker(client, "Weight");
+            var dashboardId = await CreateDashboard(client);
+            var chartId = await PlaceLineChart(client, dashboardId, tracker);
+
+            WidgetLinkDto LinkTo(string itemId) => new()
+            {
+                ItemId = itemId,
+                TrackerId = tracker.Id,
+                FieldByQuery = new() { ["0"] = tracker.AmountFieldId }
+            };
+
+            var item = await Data(await client.PostAsJsonAsync(
+                $"dashboard/{dashboardId}/items/filter",
+                new SaveFilterItemDto { Clauses = AmountOverClauses(), Links = [LinkTo(chartId)] }));
+            var filterId = item.GetProperty("id").GetString()!;
+
+            // A link the widget never had is a mistake, not something that went stale under
+            // it: adding one to a widget that isn't on the board is still rejected.
+            var response = await client.PutAsJsonAsync(
+                $"dashboard/{dashboardId}/items/{filterId}/filter",
+                new SaveFilterItemDto
+                {
+                    Clauses = AmountOverClauses(),
+                    Links = [LinkTo(chartId), LinkTo(Guid.NewGuid().ToString())]
+                });
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         }
 
         [Fact]
