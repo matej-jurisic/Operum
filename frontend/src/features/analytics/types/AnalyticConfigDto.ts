@@ -1,6 +1,8 @@
 export interface PurposeDto {
     name: string;
     allowedDataTypes: string[];
+    /** True for a purpose the calculation runs fine without (Min/Max's Display field). */
+    optional: boolean;
 }
 
 export interface CodeDto {
@@ -53,7 +55,11 @@ export function effectivePurposes(
     const base = code?.purposes ?? [];
     if (!rt.groupingPurpose || !grouping) return base;
     return [
-        { name: rt.groupingPurpose, allowedDataTypes: grouping.allowedDataTypes },
+        {
+            name: rt.groupingPurpose,
+            allowedDataTypes: grouping.allowedDataTypes,
+            optional: false,
+        },
         ...base,
     ];
 }

@@ -17,6 +17,7 @@ import { analyticsController } from "../../analytics/api/analyticsController";
 import {
     AnalyticPurposeEnum,
     codeSpansTrackers,
+    purposeHint,
 } from "../../analytics/enums/AnalyticPurposeEnum";
 import { AnalyticResultTypeEnum } from "../../analytics/enums/AnalyticResultTypeEnum";
 import {
@@ -327,7 +328,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
     const isRowComplete = (row: TrackerRow): boolean =>
         !!row.trackerId &&
         calculationChosen &&
-        purposes.every((p) => !!row.fieldMappings[p.name]);
+        purposes.every((p) => p.optional || !!row.fieldMappings[p.name]);
 
     // The purpose that lands on the shared x-axis of a combined line/bar chart. Only these
     // types offer the "matched values only" option.
@@ -486,9 +487,13 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                                 <Select
                                     key={purpose.name}
                                     label={purpose.name}
-                                    placeholder={`Select field (${purpose.allowedDataTypes.join(
-                                        ", "
-                                    )})`}
+                                    placeholder={
+                                        purpose.optional
+                                            ? "Optional"
+                                            : `Select field (${purpose.allowedDataTypes.join(
+                                                  ", "
+                                              )})`
+                                    }
                                     data={fieldOptionsFor(row, purpose, index)}
                                     value={row.fieldMappings[purpose.name] || null}
                                     onChange={(value) =>
@@ -508,7 +513,7 @@ export function CustomAnalyticForm({ onBack, onAdd }: Props) {
                                             ? isPairedCode
                                                 ? `Limited to ${narrowType} fields so the two trackers match up.`
                                                 : `Limited to ${narrowType} fields so both trackers share one axis.`
-                                            : undefined
+                                            : purposeHint(purpose)
                                     }
                                 />
                             ))}

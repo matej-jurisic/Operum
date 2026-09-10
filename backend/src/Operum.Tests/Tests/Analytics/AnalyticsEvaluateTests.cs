@@ -256,5 +256,68 @@ namespace Operum.Tests.Tests.Analytics
             var response = await owner.PostAsJsonAsync("analytics/evaluate", dto);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
+
+        // Min/Max compare one field but may show another: the calculation picks the entry
+        // with the highest Amount, and the widget shows that entry's Location.
+        [Fact]
+        public async Task Evaluate_MaxWithDisplayField_ShowsThatFieldFromTheWinningEntry()
+        {
+            var client = await OwnerClient();
+            var (trackerId, amountId, locationId) = await SeedTracker(client);
+
+            var dto = new EvaluateWidgetDto
+            {
+                ResultType = AnalyticTypes.SingleValue,
+                Code = AnalyticCodes.Max,
+                Sources =
+                [
+                    Source(trackerId,
+                        Field(amountId, AnalyticPurposes.Value),
+                        Field(locationId, AnalyticPurposes.Display))
+                ]
+            };
+
+            var response = await client.PostAsJsonAsync("analytics/evaluate", dto);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var result = await TestApi.Data(response);
+            Assert.Equal("office", result.GetProperty("value").GetString());
+            // Formatted as the displayed field, not the compared one.
+            Assert.Equal(DataTypes.String, result.GetProperty("valueField").GetProperty("type").GetString());
+        }
+
+        [Fact]
+        public async Task Evaluate_MinWithoutDisplayField_ShowsTheComparedValue()
+        {
+            var client = await OwnerClient();
+            var (trackerId, amountId, _) = await SeedTracker(client);
+
+            var dto = new EvaluateWidgetDto
+            {
+                ResultType = AnalyticTypes.SingleValue,
+                Code = AnalyticCodes.Min,
+                Sources = [Source(trackerId, Field(amountId, AnalyticPurposes.Value))]
+            };
+
+            var response = await client.PostAsJsonAsync("analytics/evaluate", dto);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var result = await TestApi.Data(response);
+            Assert.Equal("3.00", result.GetProperty("value").GetString());
+            Assert.Equal(DataTypes.Number, result.GetProperty("valueField").GetProperty("type").GetString());
+        }
+
+        [Fact]
+        public async Task Evaluate_DisplayFieldOnACalculationThatDoesNotTakeOne_ReturnsBadRequest()
+        {
+            var client = await OwnerClient();
+            var (trackerId, amountId, locationId) = await SeedTracker(client);
+
+            var dto = CountDto(trackerId, amountId);
+            dto.Sources[0].Fields.Add(Field(locationId, AnalyticPurposes.Display));
+
+            var response = await client.PostAsJsonAsync("analytics/evaluate", dto);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
     }
 }

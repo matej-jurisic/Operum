@@ -231,6 +231,10 @@ export default function NotificationFormDialog({ onClose, initialNotification }:
         setSelectedCode(singleValueCodes.find((c) => c.code === code));
     };
 
+    // A condition compares the calculated value itself, so the optional purposes that only
+    // change what a widget displays (Min/Max's Display field) are left out here.
+    const analyticPurposes = (selectedCode?.purposes ?? []).filter((p) => !p.optional);
+
     const mappedValueFieldId = form.values.fieldMappings["Value"];
     const mappedValueField = fields.find((f) => f.id === mappedValueFieldId);
     const returnType = selectedCode
@@ -283,10 +287,10 @@ export default function NotificationFormDialog({ onClose, initialNotification }:
         const viewId = values.viewId;
 
         const purposeFields = values.valueMode === "Analytic"
-            ? selectedCode?.purposes.map((p) => ({
+            ? analyticPurposes.map((p) => ({
                   fieldId: values.fieldMappings[p.name] ?? "",
                   purpose: p.name,
-              })).filter((f) => f.fieldId) ?? []
+              })).filter((f) => f.fieldId)
             : values.displayFieldIds.map((fieldId) => ({
                   fieldId,
                   purpose: NotificationPurposes.Display,
@@ -411,7 +415,7 @@ export default function NotificationFormDialog({ onClose, initialNotification }:
                                     onChange={handleCodeChange}
                                     searchable
                                 />
-                                {selectedCode && selectedCode.purposes.map((purpose) => (
+                                {analyticPurposes.map((purpose) => (
                                     <Select
                                         key={purpose.name}
                                         label={purpose.name}

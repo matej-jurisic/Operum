@@ -270,10 +270,12 @@ namespace Operum.Service.Services.Widgets
         private async Task<Result> BuildSourceFields(string resultType, string code, string? grouping, CreateWidgetSourceRequestDto dto, WidgetSource source)
         {
             var requiredPurposes = AnalyticDefinitionList.GetRequiredPurposes(resultType, code, grouping);
+            var allowedPurposes = AnalyticDefinitionList.GetAllowedPurposes(resultType, code, grouping).ToHashSet();
             var suppliedPurposes = dto.Fields.Select(f => f.Purpose).ToList();
 
             if (suppliedPurposes.Count != suppliedPurposes.Distinct().Count() ||
-                !requiredPurposes.ToHashSet().SetEquals(suppliedPurposes))
+                !suppliedPurposes.All(allowedPurposes.Contains) ||
+                requiredPurposes.Any(p => !suppliedPurposes.Contains(p)))
                 return Result.Failure(ResultStatusCodes.BadRequest, Messages.Required($"a field for each of: {string.Join(", ", requiredPurposes)}"));
 
             foreach (var field in dto.Fields)

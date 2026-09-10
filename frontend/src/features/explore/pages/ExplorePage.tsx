@@ -351,7 +351,7 @@ export default function ExplorePage() {
     const isRowComplete = (row: SourceInput): boolean =>
         !!row.trackerId &&
         calculationChosen &&
-        purposes.every((p) => !!row.fieldByPurpose[p.name]);
+        purposes.every((p) => p.optional || !!row.fieldByPurpose[p.name]);
 
     const mappedFields = (row: SourceInput) =>
         Object.entries(row.fieldByPurpose)

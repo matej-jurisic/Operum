@@ -43,7 +43,7 @@ namespace Operum.Model.Constants.Analytics.Definitions
             {
                 [AnalyticTypes.SingleValue] = new AnalyticDefinition
                 {
-                    Purposes = [AnalyticPurposes.Value],
+                    Purposes = [AnalyticPurposes.Value, AnalyticPurposes.Display],
                     Codes = new()
                     {
                         [AnalyticCodes.Count] = new AnalyticPurposeDataTypes
@@ -54,21 +54,27 @@ namespace Operum.Model.Constants.Analytics.Definitions
                                 [AnalyticPurposes.Value] = [.. DataTypes.All]
                             }
                         },
+                        // Value picks the entry; the optional Display field is what the
+                        // widget then shows for it (e.g. the longest run's route name).
                         [AnalyticCodes.Min] = new AnalyticPurposeDataTypes
                         {
                             Label = "Minimum",
                             AllowedDataTypes = new()
                             {
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan, DataTypes.Date, DataTypes.DateTime]
-                            }
+                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan, DataTypes.Date, DataTypes.DateTime],
+                                [AnalyticPurposes.Display] = [.. DataTypes.All]
+                            },
+                            OptionalPurposes = [AnalyticPurposes.Display]
                         },
                         [AnalyticCodes.Max] = new AnalyticPurposeDataTypes
                         {
                             Label = "Maximum",
                             AllowedDataTypes = new()
                             {
-                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan, DataTypes.Date, DataTypes.DateTime]
-                            }
+                                [AnalyticPurposes.Value] = [DataTypes.Number, DataTypes.TimeSpan, DataTypes.Date, DataTypes.DateTime],
+                                [AnalyticPurposes.Display] = [.. DataTypes.All]
+                            },
+                            OptionalPurposes = [AnalyticPurposes.Display]
                         },
                         [AnalyticCodes.Average] = new AnalyticPurposeDataTypes
                         {
@@ -401,8 +407,14 @@ namespace Operum.Model.Constants.Analytics.Definitions
 
         // The purposes a given calculation needs mapped to a field. For a grouping type
         // that's the grouping purpose plus whatever the aggregation reads (nothing, for
-        // Count); for everything else it's exactly the keys of the code's AllowedDataTypes.
-        public static IReadOnlyCollection<string> GetRequiredPurposes(string resultType, string code, string? grouping = null)
+        // Count); for everything else it's the keys of the code's AllowedDataTypes, minus
+        // the ones it marks optional.
+        public static IReadOnlyCollection<string> GetRequiredPurposes(string resultType, string code, string? grouping = null) =>
+            [.. GetAllowedPurposes(resultType, code, grouping).Where(p => !IsOptionalPurpose(resultType, code, p))];
+
+        // Every purpose the calculation accepts, required or optional. What a supplied
+        // mapping is checked against; GetRequiredPurposes is what it has to cover.
+        public static IReadOnlyCollection<string> GetAllowedPurposes(string resultType, string code, string? grouping = null)
         {
             if (!ByResultType.TryGetValue(resultType, out var def) || !def.Codes.TryGetValue(code, out var codeDef))
                 return [];
@@ -412,6 +424,13 @@ namespace Operum.Model.Constants.Analytics.Definitions
 
             return [def.GroupingPurpose, .. codeDef.AllowedDataTypes.Keys];
         }
+
+        // Whether this calculation can be saved without a field for the purpose (Min/Max's
+        // Display field). The grouping purpose is never optional.
+        public static bool IsOptionalPurpose(string resultType, string code, string purpose) =>
+            ByResultType.TryGetValue(resultType, out var def) &&
+            def.Codes.TryGetValue(code, out var codeDef) &&
+            codeDef.OptionalPurposes.Contains(purpose);
 
         // The human-readable name for an analytic, e.g. "Line Chart · Weekly average: Day,
         // Amount". Leads with the chart type because a calculation label alone doesn't

@@ -39,7 +39,8 @@ namespace Operum.Service.Services.Analytics
                             .Select(p => new AnalyticConfigPurpose
                             {
                                 Name = p.Key,
-                                AllowedDataTypes = [.. p.Value]
+                                AllowedDataTypes = [.. p.Value],
+                                Optional = AnalyticDefinitionList.IsOptionalPurpose(rt.Key, code.Key, p.Key)
                             })]
                     })],
                     Groupings = [.. rt.Value.Groupings.Select(g => new AnalyticConfigGrouping
@@ -158,17 +159,19 @@ namespace Operum.Service.Services.Analytics
         }
 
         // Validates one source's purpose -> field mapping the same way
-        // WidgetsService.BuildSourceFields does: the supplied purposes must be exactly the
-        // set the code requires, each field must belong to the tracker, and its data type
-        // must be one the code allows for that purpose.
+        // WidgetsService.BuildSourceFields does: the supplied purposes must cover the ones
+        // the code requires and add nothing it doesn't accept, each field must belong to the
+        // tracker, and its data type must be one the code allows for that purpose.
         private static Result<Dictionary<string, Field>> BuildFieldMap(
             string resultType, string code, string? grouping, EvaluateSourceDto src, IReadOnlyDictionary<string, Field> trackerFields)
         {
             var requiredPurposes = AnalyticDefinitionList.GetRequiredPurposes(resultType, code, grouping);
+            var allowedPurposes = AnalyticDefinitionList.GetAllowedPurposes(resultType, code, grouping).ToHashSet();
             var suppliedPurposes = src.Fields.Select(f => f.Purpose).ToList();
 
             if (suppliedPurposes.Count != suppliedPurposes.Distinct().Count() ||
-                !requiredPurposes.ToHashSet().SetEquals(suppliedPurposes))
+                !suppliedPurposes.All(allowedPurposes.Contains) ||
+                requiredPurposes.Any(p => !suppliedPurposes.Contains(p)))
                 return Result.Failure(ResultStatusCodes.BadRequest,
                     Messages.Required($"a field for each of: {string.Join(", ", requiredPurposes)}"));
 

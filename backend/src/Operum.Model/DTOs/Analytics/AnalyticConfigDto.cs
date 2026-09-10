@@ -42,5 +42,7 @@ namespace Operum.Model.DTOs.Analytics
     {
         public string Name { get; set; } = default!;
         public List<string> AllowedDataTypes { get; set; } = [];
+        // True for a purpose the calculation runs fine without (Min/Max's Display field).
+        public bool Optional { get; set; }
     }
 }

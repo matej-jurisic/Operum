@@ -31,11 +31,11 @@ namespace Operum.Service.Domain.Analytics
                 return Result.Failure(ResultStatusCodes.BadRequest,
                     $"Calculation '{grouping}/{code}' not allowed for {resultType}");
 
-            var required = AnalyticDefinitionList.GetRequiredPurposes(resultType, code, grouping).ToHashSet();
+            var allowed = AnalyticDefinitionList.GetAllowedPurposes(resultType, code, grouping).ToHashSet();
 
             foreach (var (purpose, field) in request.FieldMap)
             {
-                if (!required.Contains(purpose))
+                if (!allowed.Contains(purpose))
                     return Result.Failure(ResultStatusCodes.BadRequest,
                         $"Purpose '{purpose}' is not part of this calculation for {resultType}");
 

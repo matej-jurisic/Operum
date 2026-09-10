@@ -9,6 +9,7 @@ import {
 } from "@mantine/core";
 import { UseFormReturnType } from "@mantine/form";
 import { MdDelete } from "react-icons/md";
+import { purposeHint } from "../../analytics/enums/AnalyticPurposeEnum";
 import { PurposeDto } from "../../analytics/types/AnalyticConfigDto";
 import { FieldDto } from "../../fields/types/FieldDto";
 import { ViewDto } from "../../views/types/ViewDto";
@@ -105,9 +106,13 @@ export function SourcePanel({
                     <Select
                         key={purpose.name}
                         label={purpose.name}
-                        placeholder={`Select field (${purpose.allowedDataTypes.join(
-                            ", ",
-                        )})`}
+                        placeholder={
+                            purpose.optional
+                                ? "Optional"
+                                : `Select field (${purpose.allowedDataTypes.join(
+                                      ", ",
+                                  )})`
+                        }
                         data={fieldOptionsFor(purpose)}
                         value={source.fieldByPurpose[purpose.name] || null}
                         onChange={(value) =>
@@ -120,7 +125,7 @@ export function SourcePanel({
                             purpose.name === narrowPurpose &&
                             narrowType
                                 ? `Limited to ${narrowType} fields so the trackers line up.`
-                                : undefined
+                                : purposeHint(purpose)
                         }
                     />
                 ))}

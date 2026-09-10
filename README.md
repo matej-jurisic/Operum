@@ -52,7 +52,7 @@ Charts are built in the Widget Library and calculated at query time. Each chart 
 
 | Type | Variants | Description |
 |---|---|---|
-| Single Value | 12 | One headline metric: count, sum, min, max, average, standard deviation, unique count, most/least common, or yes/no counts and percentage |
+| Single Value | 12 | One headline metric: count, sum, min, max, average, standard deviation, unique count, most/least common, or yes/no counts and percentage. Min and max compare one field but can display another, so the widget shows what the winning entry holds in that field instead of the number |
 | Goal | 9 | A single value calculation shown as progress toward a target you set, with a progress bar and percentage. The target can switch based on the values of the board filters the widget follows |
 | Line Chart | grouping x calc | Pick a grouping (none for raw values, exact value, or day/week/month/year) and a calculation (sum, average, count, min, max, or a cumulative running total) independently |
 | Bar Chart | grouping x calc | Pick a grouping (none for raw values, exact category, or day/week/month/year) and a calculation (sum, average, count, min, or max) independently |
