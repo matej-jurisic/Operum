@@ -284,6 +284,9 @@ namespace Operum.Tests.Tests.Analytics
             Assert.Equal("office", result.GetProperty("value").GetString());
             // Formatted as the displayed field, not the compared one.
             Assert.Equal(DataTypes.String, result.GetProperty("valueField").GetProperty("type").GetString());
+            // The compared value rides along so the card can show it under the label.
+            Assert.Equal("8.00", result.GetProperty("secondaryValue").GetString());
+            Assert.Equal(DataTypes.Number, result.GetProperty("secondaryValueField").GetProperty("type").GetString());
         }
 
         [Fact]

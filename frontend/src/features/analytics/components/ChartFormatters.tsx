@@ -15,21 +15,31 @@ import {
     ScatterChartAnalyticDto,
 } from "../types/AnalyticDto";
 
+type AxisFormatter = (value: string | number | null | undefined) => string;
+
+// Recharts' tooltip `content` render prop. Its payload shape varies by chart type and is
+// awkward to model precisely; the individual tooltip builders below read only a handful of
+// fields off it, so it stays loose here rather than spreading casts through every builder.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type TooltipRenderProps = any;
+
 export const getAxisFormatter = (
     fieldType: string | undefined,
-): ((value: any) => string) => {
-    if (fieldType === FieldTypes.TimeSpan) return formatMinutesToTime;
-    if (fieldType === FieldTypes.Bool) return formatBoolean;
-    if (fieldType === FieldTypes.DateTime) return formatDateTime;
-    if (fieldType === FieldTypes.Date) return formatDateOnly;
-    return (value: any): string => value;
+): AxisFormatter => {
+    if (fieldType === FieldTypes.TimeSpan)
+        return formatMinutesToTime as AxisFormatter;
+    if (fieldType === FieldTypes.Bool) return formatBoolean as AxisFormatter;
+    if (fieldType === FieldTypes.DateTime)
+        return formatDateTime as AxisFormatter;
+    if (fieldType === FieldTypes.Date) return formatDateOnly as AxisFormatter;
+    return (value): string => String(value ?? "");
 };
 
 export const createTooltipContent = (
     analytic: LineChartAnalyticDto,
     color: string
 ) => {
-    return ({ payload, label }: any) => {
+    return ({ payload, label }: TooltipRenderProps) => {
         if (!payload?.[0]) return null;
 
         const value = payload[0].payload.y;
@@ -58,7 +68,7 @@ export const createTooltipContent = (
 };
 
 export const createDonutTooltipContent = (analytic: DonutChartAnaylticDto) => {
-    return ({ payload }: any) => {
+    return ({ payload }: TooltipRenderProps) => {
         if (!payload?.[0]) return null;
         const name = payload[0].name;
         const value = payload[0].payload.value;
@@ -91,12 +101,14 @@ export const createBarChartTooltipContent = (
     analytic: BarChartAnalyticDto,
     color: string
 ) => {
-    return ({ payload, label }: any) => {
+    return ({ payload, label }: TooltipRenderProps) => {
         if (!payload?.[0]) return null;
 
         const value = payload[0].payload.value;
         const valueLabel = analytic.valueField?.name ?? "Count";
-        const f = analytic.valueField ? getAxisFormatter(analytic.valueField.type) : (v: any) => String(v);
+        const f: AxisFormatter = analytic.valueField
+            ? getAxisFormatter(analytic.valueField.type)
+            : (v) => String(v ?? "");
 
         return (
             <Paper p="sm" shadow="sm" withBorder>
@@ -121,7 +133,7 @@ export const createBarChartTooltipContent = (
 };
 
 export const createComposedTooltipContent = (analytic: ComposedChartAnalyticDto) => {
-    return ({ payload, label }: any) => {
+    return ({ payload, label }: TooltipRenderProps) => {
         if (!payload?.length) return null;
 
         // Sources may bucket by different x semantics (dates vs. category names), so this
@@ -135,7 +147,7 @@ export const createComposedTooltipContent = (analytic: ComposedChartAnalyticDto)
                     {xField ? renderValue(xField.type, label) : label}
                 </Text>
                 <Stack gap={4}>
-                    {payload.map((entry: any) => {
+                    {payload.map((entry: TooltipRenderProps) => {
                         const series = analytic.series.find((s) => s.key === entry.dataKey);
                         if (!series || entry.value == null) return null;
                         const f = getAxisFormatter(series.valueField.type);
@@ -165,7 +177,7 @@ export const createScatterTooltipContent = (
     analytic: ScatterChartAnalyticDto,
     color: string
 ) => {
-    return ({ payload }: any) => {
+    return ({ payload }: TooltipRenderProps) => {
         if (!payload?.[0]) return null;
 
         const dataPoint = payload[0].payload;

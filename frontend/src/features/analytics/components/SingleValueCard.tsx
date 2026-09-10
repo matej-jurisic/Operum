@@ -48,6 +48,12 @@ export function SingleValueCard({
               )
             : undefined;
 
+    // Keep the compared value a caption next to the headline: legible, never competing
+    // with it, and not stuck at 14px when the headline has scaled up on a large card.
+    const secondaryFontSize = valueFontSize
+        ? Math.max(12, Math.min(22, valueFontSize * 0.4))
+        : undefined;
+
     return (
         <WidgetShell
             layout={layout}
@@ -85,17 +91,38 @@ export function SingleValueCard({
                         : undefined
                 }
             >
-                <Text
-                    size={valueFontSize ? undefined : "xl"}
-                    fw={600}
-                    style={{
-                        wordBreak: "break-word",
-                        lineHeight: 1.2,
-                        fontSize: valueFontSize,
-                    }}
-                >
-                    {renderValue(analytic.valueField?.type, analytic.value)}
-                </Text>
+                <div style={{ minWidth: 0 }}>
+                    <Text
+                        size={valueFontSize ? undefined : "xl"}
+                        fw={600}
+                        style={{
+                            wordBreak: "break-word",
+                            lineHeight: 1.2,
+                            fontSize: valueFontSize,
+                        }}
+                    >
+                        {renderValue(analytic.valueField?.type, analytic.value)}
+                    </Text>
+                    {analytic.secondaryValue && (
+                        <Text
+                            size={secondaryFontSize ? undefined : "sm"}
+                            c="dimmed"
+                            style={{
+                                wordBreak: "break-word",
+                                lineHeight: 1.2,
+                                fontSize: secondaryFontSize,
+                            }}
+                        >
+                            {analytic.secondaryValueField?.name
+                                ? `${analytic.secondaryValueField.name}: `
+                                : ""}
+                            {renderValue(
+                                analytic.secondaryValueField?.type,
+                                analytic.secondaryValue,
+                            )}
+                        </Text>
+                    )}
+                </div>
             </Box>
         </WidgetShell>
     );

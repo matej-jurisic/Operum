@@ -22,6 +22,7 @@ import { FilterTemplate, filterTemplates } from "./ViewFilterTemplates";
 
 interface Props {
     fields: FieldDto[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     form: UseFormReturnType<any>;
     filtersPath?: string;
     color?: string;
@@ -38,8 +39,11 @@ export default function EntryFilterListEditor({
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [selectedFieldForTemplate, setSelectedFieldForTemplate] = useState("");
 
-    const filters: Array<{ fieldId: string; operator: string; value?: any }> =
-        getPathValue(form.values, filtersPath) ?? [];
+    const filters: Array<{
+        fieldId: string;
+        operator: string;
+        value?: string | number | Date;
+    }> = getPathValue(form.values, filtersPath) ?? [];
     const canAdd = filters.length < maxFilters;
 
     const fieldOptions = fields.map((f) => ({ value: f.id, label: f.name }));

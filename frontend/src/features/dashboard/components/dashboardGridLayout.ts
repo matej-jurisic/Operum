@@ -18,6 +18,11 @@ export const DASHBOARD_GRID_COLUMNS = 24;
 /** Kept in step with DashboardGrid.MobileColumns. */
 export const DASHBOARD_MOBILE_GRID_COLUMNS = 4;
 
+/** The outer width of the frame the board is boxed into when the mobile layout is arranged
+    from a desktop-width screen. Well inside the 900px narrow breakpoint; the grid itself
+    renders a 16px inset narrower, matching a real phone. */
+export const MOBILE_PREVIEW_WIDTH = 400;
+
 // 2px. A row unit is dwarfed by the 16px vertical margin baked into every widget's
 // height, so what a drag or resize actually snaps to is rowHeight + margin: 18px here,
 // half the 36px step it was at rowHeight 20. HalveDashboardGridRowHeight doubled every

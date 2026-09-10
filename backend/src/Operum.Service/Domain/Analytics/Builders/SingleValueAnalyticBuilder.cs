@@ -75,6 +75,10 @@ namespace Operum.Service.Domain.Analytics.Builders
                     .FirstOrDefault(fv => fv.FieldId == displayField.Id)
                     ?.GetValueAsString();
 
+                // Keep the compared value around so the card can show it under the label.
+                result.SecondaryValue = result.Value;
+                result.SecondaryValueField = MapField(valueField, valueField.Type);
+
                 result.Value = displayValue ?? string.Empty;
                 result.ValueField = MapField(displayField, displayField.Type);
 

@@ -821,7 +821,7 @@ const Home = observer(() => {
                                 <SectionHeader
                                     eyebrow="Dashboards"
                                     title="Put it all on one board"
-                                    subtitle="Drag widgets into place on any number of boards. Desktop and mobile layouts are kept separately."
+                                    subtitle="Drag widgets into place on any number of boards. Keep separate desktop and mobile layouts, arranging the phone version in a phone-width frame without leaving your desk."
                                     primaryColor={theme.primaryColor}
                                 />
                                 <Grid>

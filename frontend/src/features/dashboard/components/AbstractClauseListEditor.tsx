@@ -69,6 +69,7 @@ interface ClauseTemplateOption {
 }
 
 interface Props {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     form: UseFormReturnType<any>;
     path: string;
     color?: string;

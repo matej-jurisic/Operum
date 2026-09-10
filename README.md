@@ -34,7 +34,7 @@ Views are assembled from reusable queries. A query is a single clause, one filte
 
 ### Dashboards
 
-Build any number of dashboards ("boards"), each with its own name, color, and icon, and set one as your landing page. A board is a grid of widgets you arrange by dragging; desktop and mobile layouts are kept separately, so a board can be dense on a screen and single-column on a phone. Any widget can be made expandable for a full-size view, and related widgets can be grouped into a container panel, or a set of tabs, that moves and resizes as one.
+Build any number of dashboards ("boards"), each with its own name, color, and icon, and set one as your landing page. A board is a grid of widgets you arrange by dragging; desktop and mobile layouts are kept separately, so a board can be dense on a screen and single-column on a phone, and while arranging you can switch to a phone-width frame to lay out the mobile version without leaving your desk. Any widget can be made expandable for a full-size view, and related widgets can be grouped into a container panel, or a set of tabs, that moves and resizes as one.
 
 | Widget | What it does |
 |---|---|
@@ -54,7 +54,7 @@ Charts are built in the Widget Library and calculated at query time. Each chart 
 
 | Type | Variants | Description |
 |---|---|---|
-| Single Value | 12 | One headline metric: count, sum, min, max, average, standard deviation, unique count, most/least common, or yes/no counts and percentage. Min and max compare one field but can display another, so the widget shows what the winning entry holds in that field instead of the number |
+| Single Value | 12 | One headline metric: count, sum, min, max, average, standard deviation, unique count, most/least common, or yes/no counts and percentage. Min and max compare one field but can display another, so the widget leads with what the winning entry holds in that field and shows the compared value beneath it |
 | Goal | 9 | A single value calculation shown as progress toward a target you set, with a progress bar and percentage. The target can switch based on the values of the board filters the widget follows |
 | Line Chart | grouping x calc | Pick a grouping (none for raw values, exact value, or day/week/month/year) and a calculation (sum, average, count, min, max, or a cumulative running total) independently |
 | Bar Chart | grouping x calc | Pick a grouping (none for raw values, exact category, or day/week/month/year) and a calculation (sum, average, count, min, or max) independently |

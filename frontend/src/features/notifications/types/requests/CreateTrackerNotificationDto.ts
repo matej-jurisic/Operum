@@ -37,4 +37,4 @@ export interface CreateTrackerNotificationDto {
     condition: CreateNotificationConditionDto;
 }
 
-export interface UpdateTrackerNotificationDto extends CreateTrackerNotificationDto {}
+export type UpdateTrackerNotificationDto = CreateTrackerNotificationDto;

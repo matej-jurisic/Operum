@@ -1,6 +1,7 @@
 import {
     Button,
     Group,
+    SegmentedControl,
     Stack,
     Text,
     ThemeIcon,
@@ -11,7 +12,12 @@ import { useMediaQuery } from "@mantine/hooks";
 import { observer } from "mobx-react";
 import { createElement, useCallback, useEffect, useState } from "react";
 import { FiCheck, FiPlus } from "react-icons/fi";
-import { TbEyeOff, TbLayoutDashboard } from "react-icons/tb";
+import {
+    TbDeviceDesktop,
+    TbDeviceMobile,
+    TbEyeOff,
+    TbLayoutDashboard,
+} from "react-icons/tb";
 import { useNavigate, useParams } from "react-router-dom";
 import ConfirmationDialog from "../../../shared/components/ConfirmationDialog";
 import SidebarBurger from "../../../shared/components/navigation/SidebarBurger";
@@ -65,6 +71,9 @@ function DashboardContent({
     } = useDashboard();
     const theme = useMantineTheme();
     const [isConfiguring, setIsConfiguring] = useState(false);
+    // Arranges the mobile layout inside a phone-width frame while the viewport stays wide.
+    // Cleared whenever arrange mode ends so the next session opens on the desktop board.
+    const [previewMobile, setPreviewMobile] = useState(false);
     const [isWidgetsOpen, setIsWidgetsOpen] = useState(false);
     const [isHiddenOpen, setIsHiddenOpen] = useState(false);
     const [editingItemId, setEditingItemId] = useState<string>();
@@ -87,10 +96,17 @@ function DashboardContent({
     // controls all share one row. On a phone that row only fits if the buttons on it drop
     // their labels and keep just their icons.
     const isMobile = useMediaQuery("(max-width: 48em)");
+    // Only offered above the narrow breakpoint (900px), where "Desktop" actually shows the
+    // nested board and the mobile frame is a genuine preview rather than the real layout.
+    const canPreviewMobile = useMediaQuery("(min-width: 60em)");
 
     useEffect(() => {
         refreshWidgets();
     }, [refreshWidgets]);
+
+    useEffect(() => {
+        if (!isConfiguring) setPreviewMobile(false);
+    }, [isConfiguring]);
 
     const color =
         activeBoard.color && activeBoard.color in theme.colors
@@ -156,6 +172,42 @@ function DashboardContent({
                             )}
                         </Button>
                     )}
+                    {/* Switches the arrange surface between the two saved layouts.
+                        The mobile side boxes the board to a phone-width frame. */}
+                    {isConfiguring && canPreviewMobile && (
+                        <SegmentedControl
+                            size="sm"
+                            radius="xl"
+                            color={color}
+                            value={previewMobile ? "mobile" : "desktop"}
+                            onChange={(v) => setPreviewMobile(v === "mobile")}
+                            data={[
+                                {
+                                    value: "desktop",
+                                    label: (
+                                        <span
+                                            aria-label="Arrange desktop layout"
+                                            style={{ display: "flex" }}
+                                        >
+                                            <TbDeviceDesktop size={16} />
+                                        </span>
+                                    ),
+                                },
+                                {
+                                    value: "mobile",
+                                    label: (
+                                        <span
+                                            aria-label="Arrange mobile layout"
+                                            style={{ display: "flex" }}
+                                        >
+                                            <TbDeviceMobile size={16} />
+                                        </span>
+                                    ),
+                                },
+                            ]}
+                            style={{ flexShrink: 0 }}
+                        />
+                    )}
                     {/* The only way out of arrange mode that does not cost a
                         row of chrome while the board is just being read. On a
                         phone the tick carries it on its own. */}
@@ -216,6 +268,7 @@ function DashboardContent({
                     widgets={widgets}
                     color={color}
                     isConfiguring={isConfiguring}
+                    previewMobile={previewMobile}
                     onLayoutSave={saveLayout}
                     onRemove={removeItem}
                     onEdit={setEditingItemId}

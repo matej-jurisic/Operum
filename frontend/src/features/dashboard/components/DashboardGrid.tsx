@@ -43,6 +43,9 @@ interface Props extends DashboardTileCallbacks {
   widgets: DashboardWidgetDto[];
   color: string | undefined;
   isConfiguring: boolean;
+  /** Box the board to a phone-width frame so the narrow grid renders and every drag saves
+      to the Mobile arrangement, whatever the real viewport is. Arrange mode only. */
+  previewMobile?: boolean;
   onLayoutSave: (
     variant: LayoutVariant,
     layout: DashboardLayoutItemDto[],
@@ -53,16 +56,20 @@ export function DashboardGrid({
   widgets,
   color,
   isConfiguring,
+  previewMobile = false,
   onLayoutSave,
   ...callbacks
 }: Props) {
   // Measured with a ResizeObserver. The grid renders only once `mounted` is true, so it
   // never lays itself out at the hook's assumed default width and overflows a narrower
-  // container for a frame.
+  // container for a frame. In mobile preview the frame around this element caps it to a
+  // phone width, so the measurement itself lands in the narrow variant.
   const { width, containerRef, mounted } = useContainerWidth();
-  const variant = variantForWidth(width);
+  const variant = previewMobile
+    ? LayoutVariants.Mobile
+    : variantForWidth(width);
 
-  return (
+  const board = (
     <div ref={containerRef}>
       {mounted &&
         (variant === LayoutVariants.Mobile ? (
@@ -85,6 +92,15 @@ export function DashboardGrid({
           />
         ))}
     </div>
+  );
+
+  // The frame carries the border and the inset; the measured element inside it stays
+  // padding-free so the width the grid is handed is the width it renders into (a padded
+  // measured element leaves the grid overflowing it).
+  return previewMobile ? (
+    <div className="dashboard-mobile-frame">{board}</div>
+  ) : (
+    board
   );
 }
 

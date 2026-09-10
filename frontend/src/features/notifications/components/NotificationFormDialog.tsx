@@ -25,6 +25,7 @@ import { analyticsController } from "../../analytics/api/analyticsController";
 import { AnalyticConfigDto, CodeDto } from "../../analytics/types/AnalyticConfigDto";
 import { GetStringValue } from "../../entries/components/EntryFormDialog";
 import { useFields } from "../../fields/context/FieldsContext";
+import { FieldDto } from "../../fields/types/FieldDto";
 import { useTracker } from "../../trackers/context/TrackerContext";
 import { useViews } from "../../views/context/ViewsContext";
 import DynamicDateValueInput from "../../../shared/components/DynamicDateValueInput";
@@ -241,14 +242,11 @@ export default function NotificationFormDialog({ onClose, initialNotification }:
         ? getReturnType(form.values.analyticCode, mappedValueField?.type)
         : "number";
 
-    const virtualField = useMemo(() => ({
+    const virtualField = useMemo<FieldDto>(() => ({
         id: "__condition__",
         name: "Value",
         type: returnType,
         required: false,
-        description: undefined,
-        selectOptions: undefined,
-        order: 0,
         isCalculated: false,
     }), [returnType]);
 
@@ -464,7 +462,7 @@ export default function NotificationFormDialog({ onClose, initialNotification }:
                                                 isDateType={isDateFilter}
                                                 value={form.values.filters[i]?.value}
                                                 onChange={(v) => form.setFieldValue(`filters.${i}.value`, v)}
-                                                field={{ ...virtualField, type: returnType } as any}
+                                                field={{ ...virtualField, type: returnType }}
                                                 form={form}
                                                 fieldPath={`filters.${i}.value`}
                                                 label="Value"

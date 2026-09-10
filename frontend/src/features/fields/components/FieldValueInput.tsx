@@ -6,9 +6,14 @@ import { CSSProperties } from "react";
 import { FieldDto } from "../types/FieldDto";
 import ReferenceValueInput from "./ReferenceValueInput";
 
-interface FieldValueInputProps<T extends Record<string, any> = any> {
+// Loose form typing lets the many differently-shaped forms across the app share this
+// component without a cast at each call site. Matches ReferenceValueInput's AnyForm.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyForm = UseFormReturnType<any>;
+
+interface FieldValueInputProps {
     field: FieldDto;
-    form: UseFormReturnType<T>;
+    form: AnyForm;
     fieldPath?: string;
     styles?: CSSProperties;
     /** Reference fields only: "id" for entry forms, "label" for filter editors. */
@@ -17,14 +22,14 @@ interface FieldValueInputProps<T extends Record<string, any> = any> {
     referenceLabel?: string;
 }
 
-export default function FieldValueInput<T extends Record<string, any> = any>({
+export default function FieldValueInput({
     field,
     form,
     fieldPath,
     styles,
     referenceValueMode,
     referenceLabel,
-}: FieldValueInputProps<T>) {
+}: FieldValueInputProps) {
     const path = fieldPath || field.name;
 
     const { key, ...baseProps } = {
@@ -50,7 +55,7 @@ export default function FieldValueInput<T extends Record<string, any> = any>({
                 <NumberInput key={key} {...baseProps} style={styles} />
             );
 
-        case "bool":
+        case "bool": {
             const boolValue = baseProps.value;
             const stringValue =
                 typeof boolValue === "boolean"
@@ -71,6 +76,7 @@ export default function FieldValueInput<T extends Record<string, any> = any>({
                     value={stringValue}
                 />
             );
+        }
 
         case "date":
             return (

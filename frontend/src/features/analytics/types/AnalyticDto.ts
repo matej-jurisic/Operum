@@ -13,6 +13,9 @@ export interface SingleValueAnalyticDto extends AnalyticDto {
     value: string;
     valueField?: FieldDto;
     entryId?: string;
+    /** Min/Max with a Display field: the compared value, shown smaller under the label. */
+    secondaryValue?: string;
+    secondaryValueField?: FieldDto;
 }
 
 export interface GoalAnalyticDto extends AnalyticDto {

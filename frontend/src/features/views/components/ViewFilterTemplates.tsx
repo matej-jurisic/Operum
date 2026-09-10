@@ -15,7 +15,7 @@ export interface FilterTemplate {
     fieldTypes: string[]; // Field types this template works with
     filters: Array<{
         operator: string;
-        value?: any;
+        value?: string | number;
     }>;
 }
 
@@ -203,7 +203,7 @@ export const filterTemplates: FilterTemplate[] = [
         filters: [
             {
                 operator: OperatorTypes.Equals,
-                value: true,
+                value: "true",
             },
         ],
     },
@@ -215,7 +215,7 @@ export const filterTemplates: FilterTemplate[] = [
         filters: [
             {
                 operator: OperatorTypes.Equals,
-                value: false,
+                value: "false",
             },
         ],
     },

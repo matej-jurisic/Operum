@@ -1,5 +1,7 @@
 import { Group, NumberInput, SegmentedControl, Select, Stack, Text } from "@mantine/core";
+import { UseFormReturnType } from "@mantine/form";
 import FieldValueInput from "../../features/fields/components/FieldValueInput";
+import { FieldDto } from "../../features/fields/types/FieldDto";
 import {
     anchorOptionsForField,
     DateAnchor,
@@ -20,8 +22,9 @@ interface Props {
     isDateType: boolean;
     value: string | number | Date | undefined;
     onChange: (value: string | number | Date | undefined) => void;
-    field: any;
-    form: any;
+    field: FieldDto;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    form: UseFormReturnType<any>;
     fieldPath: string;
     label?: string;
 }

@@ -545,9 +545,7 @@ export function ConstantFormDialog(props: ConstantFormDialogProps) {
                                                                             field={
                                                                                 selectedField
                                                                             }
-                                                                            form={
-                                                                                form as any
-                                                                            }
+                                                                            form={form}
                                                                             fieldPath={`values.${vi}.filters.${fi}.value`}
                                                                             styles={{
                                                                                 flex: 1,

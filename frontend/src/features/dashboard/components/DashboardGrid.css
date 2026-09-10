@@ -9,6 +9,23 @@
    in its own `.snapgrid-item` and positions the handle with an inline style). The rules
    below are written to cover both. */
 
+/* The phone-width box the board is arranged in when the mobile layout is edited from a
+   desktop-width screen. Width kept in step with MOBILE_PREVIEW_WIDTH. The 16px inset
+   mirrors AppShell's "md" page padding, so a widget sits off the edge here the same way
+   it does on a real phone. The padding is on the frame, not the measured element inside
+   it, so the grid is still handed the width it renders into.
+
+   The frame grows to the board's full height and the page scrolls past it: a fixed height
+   with its own scrollbar would fight the drag-to-arrange gesture near the edges. */
+.dashboard-mobile-frame {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 16px;
+    border: 1px solid var(--mantine-color-default-border);
+    border-radius: var(--mantine-radius-lg);
+    background: var(--mantine-color-body);
+}
+
 .dashboard-grid .dashboard-widget {
     height: 100%;
     overflow: hidden;
