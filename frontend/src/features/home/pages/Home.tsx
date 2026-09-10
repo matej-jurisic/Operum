@@ -1,4 +1,10 @@
-import { BarChart, DonutChart, LineChart, ScatterChart } from "@mantine/charts";
+import {
+    BarChart,
+    DonutChart,
+    Heatmap,
+    LineChart,
+    ScatterChart,
+} from "@mantine/charts";
 import {
     Anchor,
     Badge,
@@ -10,6 +16,7 @@ import {
     Grid,
     Group,
     List,
+    Progress,
     ScrollArea,
     SimpleGrid,
     Stack,
@@ -52,10 +59,12 @@ import {
     TbPlus,
     TbRefresh,
     TbTable,
+    TbTemplate,
     TbToggleRight,
     TbUsers,
     TbVariable,
     TbWallet,
+    TbWand,
     TbWebhook,
 } from "react-icons/tb";
 import { Link, useNavigate } from "react-router-dom";
@@ -290,12 +299,43 @@ const USE_CASES = [
     },
 ];
 
-const ANALYTICS_CHARTS = [
-    { title: "Trend Analysis", subtitle: "Track values changing over time" },
-    { title: "Period Comparison", subtitle: "Compare totals across categories" },
-    { title: "Distribution", subtitle: "See proportions at a glance" },
-    { title: "Correlation", subtitle: "Find relationships between fields" },
-];
+const ANALYTICS_CARDS = {
+    single: {
+        title: "Headline Metric",
+        subtitle: "One number from any calculation: count, sum, average, extremes",
+    },
+    goal: {
+        title: "Goal Progress",
+        subtitle: "A single value tracked toward a target you set",
+    },
+    line: { title: "Trend Analysis", subtitle: "Track values changing over time" },
+    bar: {
+        title: "Period Comparison",
+        subtitle: "Compare totals across categories",
+    },
+    donut: { title: "Distribution", subtitle: "See proportions at a glance" },
+    scatter: {
+        title: "Correlation",
+        subtitle: "Find relationships between fields",
+    },
+    calendar: {
+        title: "Calendar",
+        subtitle: "Map entries onto the days they happened",
+    },
+};
+
+// Deterministic pseudo-random daily counts for the calendar heatmap sample.
+const CALENDAR_DATA: Record<string, number> = Object.fromEntries(
+    Array.from({ length: 364 }, (_, i) => {
+        const day = new Date(Date.UTC(2025, 0, 1 + i));
+        const noise = Math.sin(i * 12.9898) * 43758.5453;
+        const r = noise - Math.floor(noise);
+        return [
+            day.toISOString().slice(0, 10),
+            r > 0.62 ? Math.ceil((r - 0.62) * 10) : 0,
+        ];
+    }),
+);
 
 const WIDGET_TYPES = [
     {
@@ -345,6 +385,30 @@ const WIDGET_TYPES = [
         label: "Combined charts",
         description:
             "Line and bar charts that draw several trackers on one shared axis.",
+    },
+];
+
+const START_METHODS = [
+    {
+        icon: <TbTemplate size={22} />,
+        color: "indigo",
+        title: "Clone a template",
+        description:
+            "Start from a published template and get its fields and structure ready to fill in.",
+    },
+    {
+        icon: <TbWand size={22} />,
+        color: "teal",
+        title: "Guided wizard",
+        description:
+            "Step through name, color, icon, and fields, with common field presets one tap away.",
+    },
+    {
+        icon: <TbPlus size={22} />,
+        color: "grape",
+        title: "Field by field",
+        description:
+            "Or skip the wizard and add fields one at a time as the shape of your data settles.",
     },
 ];
 
@@ -593,12 +657,12 @@ const Home = observer(() => {
                                 <SimpleGrid cols={3} spacing={40}>
                                     {[
                                         {
-                                            value: "6",
+                                            value: "7",
                                             label: "Data Types",
                                         },
                                         {
-                                            value: "29",
-                                            label: "Chart Variants",
+                                            value: "7",
+                                            label: "Chart Types",
                                         },
                                         {
                                             value: "∞",
@@ -715,7 +779,7 @@ const Home = observer(() => {
                                                 The right type for every field
                                             </Title>
                                             <Text c="dimmed" lh={1.7}>
-                                                Choose from six data types to
+                                                Choose from seven data types to
                                                 model your data precisely.
                                                 Number, TimeSpan, and Boolean
                                                 fields support calculated values,
@@ -814,6 +878,62 @@ const Home = observer(() => {
                         </Container>
                     </Box>
 
+                    {/* ── Getting started ──────────────────────────────── */}
+                    <Box
+                        id="getting-started"
+                        style={{ scrollMarginTop: "60px" }}
+                    >
+                        <Container size="lg" py={80}>
+                            <Stack gap={48}>
+                                <SectionHeader
+                                    eyebrow="Getting Started"
+                                    title="Set up a tracker in minutes"
+                                    subtitle="Start from a template, follow the wizard, or build it by hand."
+                                    primaryColor={theme.primaryColor}
+                                />
+                                <Grid>
+                                    {START_METHODS.map((m) => (
+                                        <Grid.Col
+                                            key={m.title}
+                                            span={{ base: 12, sm: 4 }}
+                                        >
+                                            <Card
+                                                withBorder
+                                                radius="md"
+                                                p="lg"
+                                                h="100%"
+                                                style={{
+                                                    borderTop: `3px solid var(--mantine-color-${m.color}-5)`,
+                                                }}
+                                            >
+                                                <Stack gap="sm">
+                                                    <ThemeIcon
+                                                        size={44}
+                                                        radius="md"
+                                                        variant="light"
+                                                        color={m.color}
+                                                    >
+                                                        {m.icon}
+                                                    </ThemeIcon>
+                                                    <Text fw={600} size="sm">
+                                                        {m.title}
+                                                    </Text>
+                                                    <Text
+                                                        size="xs"
+                                                        c="dimmed"
+                                                        lh={1.5}
+                                                    >
+                                                        {m.description}
+                                                    </Text>
+                                                </Stack>
+                                            </Card>
+                                        </Grid.Col>
+                                    ))}
+                                </Grid>
+                            </Stack>
+                        </Container>
+                    </Box>
+
                     {/* ── Dashboards ────────────────────────────────────── */}
                     <Box id="dashboards" style={{ scrollMarginTop: "60px" }}>
                         <Container size="lg" py={80}>
@@ -874,18 +994,101 @@ const Home = observer(() => {
                                     primaryColor={theme.primaryColor}
                                 />
                                 <Grid>
+                                    {/* Single Value */}
+                                    <Grid.Col span={{ base: 12, sm: 6 }}>
+                                        <Card withBorder radius="md" p="lg" h="100%">
+                                            <Stack gap="xs" mb="md">
+                                                <Text fw={600} size="sm">
+                                                    {ANALYTICS_CARDS.single.title}
+                                                </Text>
+                                                <Text size="xs" c="dimmed">
+                                                    {ANALYTICS_CARDS.single.subtitle}
+                                                </Text>
+                                            </Stack>
+                                            <Stack
+                                                align="center"
+                                                justify="center"
+                                                h={240}
+                                                gap={4}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontSize: "3.5rem",
+                                                        fontWeight: 900,
+                                                        lineHeight: 1,
+                                                        backgroundImage:
+                                                            titleGradient,
+                                                        WebkitBackgroundClip:
+                                                            "text",
+                                                        WebkitTextFillColor:
+                                                            "transparent",
+                                                        backgroundClip: "text",
+                                                    }}
+                                                >
+                                                    1,284
+                                                </Text>
+                                                <Text size="sm" c="dimmed">
+                                                    entries logged this year
+                                                </Text>
+                                            </Stack>
+                                        </Card>
+                                    </Grid.Col>
+
+                                    {/* Goal */}
+                                    <Grid.Col span={{ base: 12, sm: 6 }}>
+                                        <Card withBorder radius="md" p="lg" h="100%">
+                                            <Stack gap="xs" mb="md">
+                                                <Text fw={600} size="sm">
+                                                    {ANALYTICS_CARDS.goal.title}
+                                                </Text>
+                                                <Text size="xs" c="dimmed">
+                                                    {ANALYTICS_CARDS.goal.subtitle}
+                                                </Text>
+                                            </Stack>
+                                            <Stack justify="center" h={240} gap={14}>
+                                                <Group
+                                                    justify="space-between"
+                                                    align="baseline"
+                                                >
+                                                    <Text
+                                                        fw={700}
+                                                        style={{
+                                                            fontSize: "2rem",
+                                                            lineHeight: 1,
+                                                        }}
+                                                    >
+                                                        18,240
+                                                    </Text>
+                                                    <Text
+                                                        fw={600}
+                                                        size="sm"
+                                                        c={theme.primaryColor}
+                                                    >
+                                                        73%
+                                                    </Text>
+                                                </Group>
+                                                <Progress
+                                                    value={73}
+                                                    color={`${theme.primaryColor}.6`}
+                                                    size="lg"
+                                                    radius="xl"
+                                                />
+                                                <Text size="xs" c="dimmed">
+                                                    Target: 25,000 steps
+                                                </Text>
+                                            </Stack>
+                                        </Card>
+                                    </Grid.Col>
+
                                     {/* Line */}
                                     <Grid.Col span={{ base: 12, sm: 6 }}>
                                         <Card withBorder radius="md" p="lg" h="100%">
                                             <Stack gap="xs" mb="md">
                                                 <Text fw={600} size="sm">
-                                                    {ANALYTICS_CHARTS[0].title}
+                                                    {ANALYTICS_CARDS.line.title}
                                                 </Text>
                                                 <Text size="xs" c="dimmed">
-                                                    {
-                                                        ANALYTICS_CHARTS[0]
-                                                            .subtitle
-                                                    }
+                                                    {ANALYTICS_CARDS.line.subtitle}
                                                 </Text>
                                             </Stack>
                                             <LineChart
@@ -911,13 +1114,10 @@ const Home = observer(() => {
                                         <Card withBorder radius="md" p="lg" h="100%">
                                             <Stack gap="xs" mb="md">
                                                 <Text fw={600} size="sm">
-                                                    {ANALYTICS_CHARTS[1].title}
+                                                    {ANALYTICS_CARDS.bar.title}
                                                 </Text>
                                                 <Text size="xs" c="dimmed">
-                                                    {
-                                                        ANALYTICS_CHARTS[1]
-                                                            .subtitle
-                                                    }
+                                                    {ANALYTICS_CARDS.bar.subtitle}
                                                 </Text>
                                             </Stack>
                                             <BarChart
@@ -942,13 +1142,10 @@ const Home = observer(() => {
                                         <Card withBorder radius="md" p="lg" h="100%">
                                             <Stack gap="xs" mb="md">
                                                 <Text fw={600} size="sm">
-                                                    {ANALYTICS_CHARTS[2].title}
+                                                    {ANALYTICS_CARDS.donut.title}
                                                 </Text>
                                                 <Text size="xs" c="dimmed">
-                                                    {
-                                                        ANALYTICS_CHARTS[2]
-                                                            .subtitle
-                                                    }
+                                                    {ANALYTICS_CARDS.donut.subtitle}
                                                 </Text>
                                             </Stack>
                                             <Box
@@ -977,11 +1174,11 @@ const Home = observer(() => {
                                         <Card withBorder radius="md" p="lg" h="100%">
                                             <Stack gap="xs" mb="md">
                                                 <Text fw={600} size="sm">
-                                                    {ANALYTICS_CHARTS[3].title}
+                                                    {ANALYTICS_CARDS.scatter.title}
                                                 </Text>
                                                 <Text size="xs" c="dimmed">
                                                     {
-                                                        ANALYTICS_CHARTS[3]
+                                                        ANALYTICS_CARDS.scatter
                                                             .subtitle
                                                     }
                                                 </Text>
@@ -993,6 +1190,40 @@ const Home = observer(() => {
                                                 gridAxis="x"
                                                 withTooltip={false}
                                             />
+                                        </Card>
+                                    </Grid.Col>
+
+                                    {/* Calendar */}
+                                    <Grid.Col span={12}>
+                                        <Card withBorder radius="md" p="lg" h="100%">
+                                            <Stack gap="xs" mb="md">
+                                                <Text fw={600} size="sm">
+                                                    {ANALYTICS_CARDS.calendar.title}
+                                                </Text>
+                                                <Text size="xs" c="dimmed">
+                                                    {
+                                                        ANALYTICS_CARDS.calendar
+                                                            .subtitle
+                                                    }
+                                                </Text>
+                                            </Stack>
+                                            <Box style={{ overflowX: "auto" }}>
+                                                <Heatmap
+                                                    data={CALENDAR_DATA}
+                                                    startDate="2025-01-01"
+                                                    endDate="2025-12-31"
+                                                    withMonthLabels
+                                                    withTooltip={false}
+                                                    rectSize={13}
+                                                    gap={3}
+                                                    colors={[
+                                                        `var(--mantine-color-${theme.primaryColor}-3)`,
+                                                        `var(--mantine-color-${theme.primaryColor}-5)`,
+                                                        `var(--mantine-color-${theme.primaryColor}-7)`,
+                                                        `var(--mantine-color-${theme.primaryColor}-9)`,
+                                                    ]}
+                                                />
+                                            </Box>
                                         </Card>
                                     </Grid.Col>
                                 </Grid>

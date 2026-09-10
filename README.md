@@ -64,6 +64,10 @@ Charts are built in the Widget Library and calculated at query time. Each chart 
 
 Each chart only exposes fields that are compatible with the role being configured: a Y-axis only accepts `number` or `timespan`, a calendar date axis only accepts `date` or `datetime`.
 
+### Explore
+
+A scratchpad for calculations that don't need a home on a board. Pick a chart type, grouping, and calculation, map one or more trackers, add inline filter clauses or reuse a saved view, and run it. The whole setup lives in the URL, so a useful exploration can be bookmarked or shared. When a result is worth keeping, promote it in place: save it to the Widget Library, or drop it straight onto a dashboard. Inline filters become a saved view on their tracker on the way.
+
 ### Integrations
 
 Pull data in from external services and map their values onto tracker fields. You pick which source field feeds which tracker field, and the type pairing is checked when you save. Imports are read-only and upsert on a provider-stable id, so re-syncing updates rows instead of duplicating them; a missing value is skipped, not written as zero. Re-import from a chosen date at any time to backfill or repair history. Stored credentials are encrypted at rest.
@@ -100,7 +104,9 @@ Permissions can be changed at any time. Tracker metadata, the default view, and 
 
 Authentication supports email/password with confirmation and Google OAuth. Two roles: **User** and **Admin**. The admin panel adds a platform overview, user management, tracker oversight, and template publishing, admins publish tracker templates that any user can clone as a starting point.
 
-A command palette (`Ctrl`/`Cmd` + `K`) jumps to any tracker or board and runs common actions from anywhere.
+A command palette (`Ctrl`/`Cmd` + `K`) jumps to any tracker or board and runs common actions (new tracker, new board, open Explore, toggle theme) from anywhere.
+
+The profile page holds account settings: username, password, time zone, which tracker or board opens on load, and account deletion.
 
 ---
 
