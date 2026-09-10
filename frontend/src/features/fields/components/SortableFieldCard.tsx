@@ -4,10 +4,12 @@ import {
     ActionIcon,
     Badge,
     Card,
+    Checkbox,
     Group,
     Stack,
     Text,
     Title,
+    Tooltip,
 } from "@mantine/core";
 import { CSSProperties } from "react";
 import { MdDelete, MdDragHandle, MdEdit } from "react-icons/md";
@@ -21,12 +23,20 @@ interface SortableFieldCardProps {
     onDelete: (field: FieldDto) => void;
     color?: string;
     isReordering: boolean;
+    isSelecting?: boolean;
+    selected?: boolean;
+    selectableReason?: string;
+    onToggleSelect?: (field: FieldDto) => void;
 }
 
 export default function SortableFieldCard({
     field,
     color,
     isReordering,
+    isSelecting,
+    selected,
+    selectableReason,
+    onToggleSelect,
     onEdit,
     onDelete,
 }: SortableFieldCardProps) {
@@ -47,9 +57,43 @@ export default function SortableFieldCard({
 
     const { canEditSchema } = useTracker();
 
+    const disabledSelect = isSelecting && !!selectableReason;
+    const handleCardClick = () => {
+        if (isSelecting && !disabledSelect) onToggleSelect?.(field);
+    };
+
     return (
-        <Card ref={setNodeRef} style={style} p="md" radius="md" withBorder>
+        <Card
+            ref={setNodeRef}
+            style={{
+                ...style,
+                cursor:
+                    isSelecting && !disabledSelect ? "pointer" : style.cursor,
+            }}
+            p="md"
+            radius="md"
+            withBorder
+            onClick={handleCardClick}
+        >
             <Group align="flex-start" justify="space-between" wrap="nowrap">
+                {isSelecting && (
+                    <Tooltip
+                        label={selectableReason}
+                        disabled={!disabledSelect}
+                        multiline
+                        w={220}
+                    >
+                        <Checkbox
+                            checked={!!selected}
+                            disabled={disabledSelect}
+                            onChange={() => onToggleSelect?.(field)}
+                            onClick={(e) => e.stopPropagation()}
+                            color={color}
+                            style={{ alignSelf: "center" }}
+                            aria-label={`Select field ${field.name}`}
+                        />
+                    </Tooltip>
+                )}
                 {/* Drag handle */}
                 {isReordering && (
                     <ActionIcon
@@ -99,7 +143,7 @@ export default function SortableFieldCard({
                 </Stack>
 
                 {/* Action buttons */}
-                {canEditSchema && (
+                {canEditSchema && !isSelecting && (
                     <Group gap="xs" wrap="nowrap">
                         <ActionIcon
                             variant="outline"

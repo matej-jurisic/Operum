@@ -1,5 +1,5 @@
 import { BarChart } from "@mantine/charts";
-import { em } from "@mantine/core";
+import { em, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { BarChartAnalyticDto } from "../types/AnalyticDto";
 import {
@@ -35,6 +35,10 @@ export function BarChartCard({
     const isMobile = useMediaQuery(`(max-width: ${em(750)})`);
     const layout = useCardLayout(fillHeight);
 
+    // The backend returns the analytic with no category field when it can no longer be
+    // resolved (e.g. a field was deleted). Nothing can be plotted in that case.
+    const { nameField } = analytic;
+
     return (
         <WidgetShell
             layout={layout}
@@ -46,37 +50,43 @@ export function BarChartCard({
             onEdit={onEdit}
             title={analytic.name}
         >
-            <BarChart
-                h={chartHeight(fillHeight, isMobile)}
-                {...cardBodyProps(fillHeight)}
-                data={analytic.points}
-                dataKey="name"
-                withXAxis={layout.withXAxis}
-                withYAxis={layout.withYAxis}
-                series={[
-                    {
-                        name: "value",
-                        color: color ?? "blue",
-                        label: analytic.valueField?.name ?? "Count",
-                    },
-                ]}
-                tooltipAnimationDuration={200}
-                xAxisProps={{
-                    tickFormatter: getAxisFormatter(analytic.nameField.type),
-                }}
-                yAxisProps={{
-                    tickFormatter: analytic.valueField
-                        ? getAxisFormatter(analytic.valueField.type)
-                        : undefined,
-                }}
-                tooltipProps={{
-                    trigger: chartTooltipTrigger(isMobile),
-                    content: createBarChartTooltipContent(
-                        analytic,
-                        color ?? "blue",
-                    ),
-                }}
-            />
+            {nameField ? (
+                <BarChart
+                    h={chartHeight(fillHeight, isMobile)}
+                    {...cardBodyProps(fillHeight)}
+                    data={analytic.points}
+                    dataKey="name"
+                    withXAxis={layout.withXAxis}
+                    withYAxis={layout.withYAxis}
+                    series={[
+                        {
+                            name: "value",
+                            color: color ?? "blue",
+                            label: analytic.valueField?.name ?? "Count",
+                        },
+                    ]}
+                    tooltipAnimationDuration={200}
+                    xAxisProps={{
+                        tickFormatter: getAxisFormatter(nameField.type),
+                    }}
+                    yAxisProps={{
+                        tickFormatter: analytic.valueField
+                            ? getAxisFormatter(analytic.valueField.type)
+                            : undefined,
+                    }}
+                    tooltipProps={{
+                        trigger: chartTooltipTrigger(isMobile),
+                        content: createBarChartTooltipContent(
+                            analytic,
+                            color ?? "blue",
+                        ),
+                    }}
+                />
+            ) : (
+                <Text size="sm" c="dimmed" ta="center" py="xl">
+                    This chart's fields are no longer available.
+                </Text>
+            )}
         </WidgetShell>
     );
 }

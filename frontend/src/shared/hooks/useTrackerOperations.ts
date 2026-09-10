@@ -2,15 +2,22 @@ import { useEntries } from "../../features/entries/context/EntriesContext";
 import { EntrySelection } from "../../features/entries/types/EntrySelection";
 import { useFields } from "../../features/fields/context/FieldsContext";
 import { CreateFieldDto } from "../../features/fields/types/CreateFieldDto";
+import { ExtractFieldsDto } from "../../features/fields/types/ExtractFieldsDto";
 import { UpdateFieldDto } from "../../features/fields/types/UpdateFieldDto";
 import { useTracker } from "../../features/trackers/context/TrackerContext";
 import { useViews } from "../../features/views/context/ViewsContext";
 import { CreateViewDto } from "../../features/views/types/requests/CreateViewDto";
 import { UpdateViewDto } from "../../features/views/types/requests/UpdateViewDto";
+import navigationStore from "../stores/NavigationStore";
 
 export const useTrackerOperations = () => {
-    const { _createField, _updateField, _updateFieldOrder, _deleteField } =
-        useFields();
+    const {
+        _createField,
+        _updateField,
+        _updateFieldOrder,
+        _deleteField,
+        _extractFields,
+    } = useFields();
 
     const {
         markEntriesDirty,
@@ -51,6 +58,16 @@ export const useTrackerOperations = () => {
         // Deleting a field drops the clauses bound to it, so the views built on them read
         // differently afterwards.
         await refreshViews();
+    };
+
+    const extractFields = async (values: ExtractFieldsDto) => {
+        const result = await _extractFields(values);
+        markEntriesDirty();
+        // The extracted fields are gone, so the clauses bound to them are too, and a new
+        // tracker now exists in the sidebar.
+        await refreshViews();
+        await navigationStore.refreshTrackers();
+        return result;
     };
 
     // ========================================
@@ -119,6 +136,7 @@ export const useTrackerOperations = () => {
         updateField,
         updateFieldOrder,
         deleteField,
+        extractFields,
 
         // Entry operations
         createEntry,

@@ -44,10 +44,10 @@ export function AnalyticCardHeader({
   // board you were arranging was never quite the board you had been looking at. While
   // arranging, float them over the top of the card instead, on a solid chip so they stay
   // legible over whatever they cover, and leave the widget's layout untouched. They sit
-  // horizontally centred: the drag grip takes the top-left corner and the resize handle
-  // the bottom-right, so the middle is the one spot on a short widget that clashes with
-  // neither. A compact card already centres its whole header, so this only kicks in for
-  // the rest.
+  // horizontally centred: the drag grip runs down the left edge and the resize handle
+  // takes the bottom-right, so the top middle is the one spot on a short widget that
+  // clashes with neither. A compact card already centres its whole header, so this only
+  // kicks in for the rest.
   const floatControls = isConfiguring && !compact;
 
   return (

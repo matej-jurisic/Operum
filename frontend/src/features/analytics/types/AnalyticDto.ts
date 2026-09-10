@@ -68,7 +68,9 @@ export interface CalendarAnalyticDto extends AnalyticDto {
 }
 
 export interface BarChartAnalyticDto extends AnalyticDto {
-    nameField: FieldDto;
+    /** Null when the configured category field can no longer be resolved (e.g. it was
+        deleted). Nothing can be plotted in that case. */
+    nameField?: FieldDto;
     valueField?: FieldDto;
     points: { name: string; value: number }[];
 }

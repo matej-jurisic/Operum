@@ -6,6 +6,10 @@ import React, {
     useState,
 } from "react";
 import { CreateFieldDto } from "../../fields/types/CreateFieldDto";
+import {
+    ExtractFieldsDto,
+    ExtractFieldsResultDto,
+} from "../../fields/types/ExtractFieldsDto";
 import { FieldDto } from "../../fields/types/FieldDto";
 import { UpdateFieldDto } from "../../fields/types/UpdateFieldDto";
 import { useTracker } from "../../trackers/context/TrackerContext";
@@ -30,6 +34,9 @@ type FieldsContextType = {
     _updateField: (fieldId: string, values: UpdateFieldDto) => Promise<void>;
     _updateFieldOrder: (fieldIds: string[]) => Promise<void>;
     _deleteField: (fieldId: string) => Promise<void>;
+    _extractFields: (
+        values: ExtractFieldsDto
+    ) => Promise<ExtractFieldsResultDto>;
 };
 
 const FieldsContext = createContext<FieldsContextType | undefined>(undefined);
@@ -89,6 +96,15 @@ export const FieldsProvider: React.FC<{ children: React.ReactNode }> = ({
         await refreshFields();
     };
 
+    const _extractFields = async (values: ExtractFieldsDto) => {
+        const response = await fieldsController.extractFields(
+            tracker.id,
+            values
+        );
+        await refreshFields();
+        return response.data;
+    };
+
     return (
         <FieldsContext.Provider
             value={{
@@ -104,6 +120,7 @@ export const FieldsProvider: React.FC<{ children: React.ReactNode }> = ({
                 _updateField,
                 _updateFieldOrder,
                 _deleteField,
+                _extractFields,
             }}
         >
             {children}

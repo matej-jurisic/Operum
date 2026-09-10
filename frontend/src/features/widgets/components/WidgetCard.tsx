@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Group, Menu, Stack, Text, ThemeIcon } from "@mantine/core";
+import { ActionIcon, Button, Card, Group, Menu, Stack, Text, ThemeIcon } from "@mantine/core";
 import { useHover } from "@mantine/hooks";
 import { IconType } from "react-icons";
 import { MdAdd, MdDelete, MdEdit, MdMoreVert } from "react-icons/md";
@@ -23,7 +23,7 @@ interface Props {
     onDelete: () => void;
 }
 
-/** Maps a chart's result type to the icon for its shape, so the list can be skimmed by
+/** Maps a chart's result type to the icon for its shape, so the grid can be skimmed by
     chart kind. Falls back to the generic histogram glyph for anything unrecognised. */
 function resultTypeIcon(resultType: string): IconType {
     switch (resultType) {
@@ -46,22 +46,21 @@ function resultTypeIcon(resultType: string): IconType {
     }
 }
 
-/** One chart Widget as a row in the Library list. There's no calculated preview here (the
+/** One chart Widget as a card in the Library grid. There's no calculated preview here (the
     Library manages definitions, not renders) -- see DashboardWidget for the actual chart,
-    drawn once a widget is placed on a board. The whole row adds the widget to the board;
-    edit and delete are the outlined action icons on the right. */
+    drawn once a widget is placed on a board. Clicking the card, or its Add button, places
+    the widget on the current board; edit and delete live in the corner menu. */
 export function WidgetCard({ widget, color, isMobile, onAdd, onEdit, onDelete }: Props) {
     const { hovered, ref } = useHover<HTMLDivElement>();
     const trackerNames = [...new Set(widget.sources.map((s) => s.trackerName))];
     const Icon = resultTypeIcon(widget.resultType);
 
     return (
-        <Group
+        <Card
             ref={ref}
-            wrap="nowrap"
-            gap="sm"
-            px="sm"
-            py={isMobile ? "sm" : "xs"}
+            withBorder
+            radius="md"
+            padding={isMobile ? "sm" : "md"}
             role="button"
             tabIndex={0}
             onClick={onAdd}
@@ -73,100 +72,73 @@ export function WidgetCard({ widget, color, isMobile, onAdd, onEdit, onDelete }:
             }}
             style={{
                 cursor: "pointer",
-                borderRadius: "var(--mantine-radius-sm)",
-                backgroundColor: hovered ? "var(--mantine-color-default-hover)" : undefined,
+                transition: "border-color 150ms ease",
+                borderColor: hovered
+                    ? `var(--mantine-color-${color}-filled)`
+                    : undefined,
             }}
         >
-            <ThemeIcon size={34} radius="md" variant="light" color={color}>
-                <Icon size={18} />
-            </ThemeIcon>
-            <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-                <Text fw={500} truncate title={widget.name}>
-                    {widget.name}
-                </Text>
-                <Text size="xs" c="dimmed" truncate>
-                    {[
-                        widget.resultType,
-                        ...(widget.goalTarget ? [`target ${widget.goalTarget}`] : []),
-                        ...trackerNames,
-                    ].join("  ·  ")}
-                </Text>
-            </Stack>
+            <Stack gap="xs" style={{ height: "100%" }}>
+                <Group justify="space-between" wrap="nowrap" align="flex-start">
+                    <ThemeIcon size={38} radius="md" variant="light" color={color}>
+                        <Icon size={20} />
+                    </ThemeIcon>
+                    <Menu position="bottom-end" withinPortal width={190}>
+                        <Menu.Target>
+                            <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                aria-label="Widget actions"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <MdMoreVert size={18} />
+                            </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown onClick={(event) => event.stopPropagation()}>
+                            <Menu.Item leftSection={<MdAdd size={16} />} onClick={onAdd}>
+                                Add to board
+                            </Menu.Item>
+                            <Menu.Item leftSection={<MdEdit size={16} />} onClick={onEdit}>
+                                Edit
+                            </Menu.Item>
+                            <Menu.Item
+                                color="red"
+                                leftSection={<MdDelete size={16} />}
+                                onClick={onDelete}
+                            >
+                                Delete
+                            </Menu.Item>
+                        </Menu.Dropdown>
+                    </Menu>
+                </Group>
 
-            {isMobile ? (
-                // Tapping the row already adds; the actions collapse into one menu so the
-                // name gets the width instead of three side-by-side controls. The trigger
-                // is a full 44px touch target with its own margin so a near-miss doesn't
-                // land on the row and fire "add" instead of opening the menu.
-                <Menu position="bottom-end" withinPortal width={200}>
-                    <Menu.Target>
-                        <ActionIcon
-                            variant="outline"
-                            color="gray"
-                            size={44}
-                            ml={4}
-                            style={{ flexShrink: 0 }}
-                            aria-label="Widget actions"
-                            onClick={(event) => event.stopPropagation()}
-                        >
-                            <MdMoreVert size={22} />
-                        </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown onClick={(event) => event.stopPropagation()}>
-                        <Menu.Item py="sm" leftSection={<MdAdd size={16} />} onClick={onAdd}>
-                            Add to board
-                        </Menu.Item>
-                        <Menu.Item py="sm" leftSection={<MdEdit size={16} />} onClick={onEdit}>
-                            Edit
-                        </Menu.Item>
-                        <Menu.Item
-                            py="sm"
-                            color="red"
-                            leftSection={<MdDelete size={16} />}
-                            onClick={onDelete}
-                        >
-                            Delete
-                        </Menu.Item>
-                    </Menu.Dropdown>
-                </Menu>
-            ) : (
-                <>
-                    <Button
-                        variant={hovered ? "light" : "subtle"}
-                        size="compact-sm"
-                        color={color}
-                        leftSection={<MdAdd size={14} />}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onAdd();
-                        }}
-                    >
-                        Add
-                    </Button>
-                    <ActionIcon
-                        variant="outline"
-                        color="gray"
-                        aria-label="Edit widget"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onEdit();
-                        }}
-                    >
-                        <MdEdit size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                        variant="outline"
-                        color="gray"
-                        aria-label="Delete widget"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onDelete();
-                        }}
-                    >
-                        <MdDelete size={16} />
-                    </ActionIcon>
-                </>
-            )}
-        </Group>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <Text fw={600} lineClamp={2} title={widget.name}>
+                        {widget.name}
+                    </Text>
+                    <Text size="xs" c="dimmed" lineClamp={2} mt={2}>
+                        {[
+                            widget.resultType,
+                            ...(widget.goalTarget ? [`target ${widget.goalTarget}`] : []),
+                            ...trackerNames,
+                        ].join("  ·  ")}
+                    </Text>
+                </div>
+
+                <Button
+                    variant={hovered ? "light" : "subtle"}
+                    size="compact-sm"
+                    color={color}
+                    leftSection={<MdAdd size={14} />}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onAdd();
+                    }}
+                    style={{ alignSelf: "flex-start" }}
+                >
+                    Add to board
+                </Button>
+            </Stack>
+        </Card>
     );
 }

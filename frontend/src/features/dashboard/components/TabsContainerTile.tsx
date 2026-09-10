@@ -128,7 +128,12 @@ export function TabsContainerTile({
       (isFirstTab && !knownTabIds.has(w.parentTabId ?? "")),
   );
   const isEmpty = activeChildren.length === 0;
+  // A titled container keeps its header in the layout at all times. An untitled one has no
+  // header at rest and grows one only while arranging: that one floats as a compact bar in
+  // the corner rather than sitting in flow, so toggling arrange mode never pushes the tab
+  // strip and the sub-grid down right as they are being arranged.
   const showHeader = hasTitle || isConfiguring;
+  const floatingHeader = isConfiguring && !hasTitle;
 
   return (
     <Paper
@@ -138,7 +143,11 @@ export function TabsContainerTile({
       data-editing={isConfiguring || undefined}
     >
       {showHeader && (
-        <div ref={handleRef} className="tabs-container-header">
+        <div
+          ref={handleRef}
+          className="tabs-container-header"
+          data-floating={floatingHeader || undefined}
+        >
           {isConfiguring && (
             <MdDragIndicator
               size={16}

@@ -34,6 +34,16 @@
     cursor: grab;
 }
 
+/* While the board is arranged a press on a widget is only ever the start of a drag, never
+   a text selection. Left enabled, a touch or long-press that lands on (or just beside) the
+   drag grip starts selecting the card's text under it. Turn selection off across every
+   widget for the duration of arrange mode; it comes back the moment the board is read. */
+.dashboard-grid.is-editing .dashboard-widget {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
 /* snapgrid's own tile positioning style hardcodes touch-action: none on every item,
    arrange mode or not. Left alone, that eats the page's touch-scroll gesture anywhere a
    finger lands on a widget. The only place a touch needs to move the widget instead of
@@ -80,13 +90,14 @@
     border-bottom: 2px solid var(--mantine-color-dimmed);
 }
 
-/* The grip the narrow grid drags a widget by, over the top left of the card. It mirrors
-   the remove button the card puts at its top right, so arrange mode reads as one row of
-   controls across the top of every widget. */
+/* The grip the narrow grid drags a widget by, floating over the middle of the card's left
+   edge. It is kept clear of the top edge on purpose: a container or tabs header floated
+   over the top of a widget during arrange then never lands on top of the grip. */
 .dashboard-drag-handle {
     position: absolute;
-    top: 4px;
+    top: 50%;
     left: 4px;
+    transform: translateY(-50%);
     z-index: 3;
     display: flex;
     align-items: center;
@@ -118,12 +129,6 @@
     height: 18px;
     max-width: 100%;
     max-height: 100%;
-}
-
-/* The handle floats over the card rather than taking a strip of its height, so on the
-   grid that has one the card's header starts after it instead of underneath it. */
-.dashboard-widget:has(> .dashboard-drag-handle) .analytic-card-header {
-    padding-left: 32px;
 }
 
 /* The card's own arrange-mode icons (edit / remove). On a compact card the header row is

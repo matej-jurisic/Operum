@@ -20,10 +20,14 @@ import {
     Group,
     ScrollArea,
     Stack,
+    Tooltip,
 } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useEffect, useState } from "react";
 import { CiBoxList } from "react-icons/ci";
 import { FiPlus } from "react-icons/fi";
+import { TbArrowsSplit } from "react-icons/tb";
+import { useNavigate } from "react-router-dom";
 import ConfirmationDialog from "../../../shared/components/ConfirmationDialog";
 import EmptyState from "../../../shared/components/EmptyState";
 import { useTrackerOperations } from "../../../shared/hooks/useTrackerOperations";
@@ -31,6 +35,7 @@ import { useTracker } from "../../trackers/context/TrackerContext";
 import { TrackerDto } from "../../trackers/types/TrackerDto";
 import { useFields } from "../context/FieldsContext";
 import { FieldDto } from "../types/FieldDto";
+import { ExtractFieldsDialog } from "./ExtractFieldsDialog";
 import { FieldFormDialog } from "./FieldFormDialog";
 import SortableFieldCard from "./SortableFieldCard";
 
@@ -42,6 +47,17 @@ enum OpenDialogType {
     CreateField,
     DeleteField,
     EditField,
+    ExtractFields,
+}
+
+// Only plain stored values can be pulled into their own tracker. A calculated field is
+// derived from others and a reference already points elsewhere, so neither means anything
+// on its own.
+function extractBlockReason(field: FieldDto): string | undefined {
+    if (field.isCalculated) return "Calculated fields cannot be extracted.";
+    if (field.type === "reference")
+        return "Reference fields cannot be extracted.";
+    return undefined;
 }
 
 export default function Fields(props: FieldsProps) {
@@ -49,10 +65,13 @@ export default function Fields(props: FieldsProps) {
     const [openDialogType, setOpenDialogType] = useState<OpenDialogType>();
     const [sortedFields, setSortedFields] = useState<FieldDto[]>([]);
     const [isReordering, setIsReordering] = useState(false);
+    const [isSelecting, setIsSelecting] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
     const { deleteField, updateFieldOrder } = useTrackerOperations();
     const { fields, refreshFieldsIfDirty } = useFields();
     const { canEditSchema } = useTracker();
+    const navigate = useNavigate();
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -71,6 +90,13 @@ export default function Fields(props: FieldsProps) {
 
     useEffect(() => {
         setSortedFields([...fields]);
+    }, [fields]);
+
+    // A field can drop out of the tracker while it is ticked (deleted in another tab, say).
+    useEffect(() => {
+        setSelectedIds((prev) =>
+            prev.filter((id) => fields.some((f) => f.id === id))
+        );
     }, [fields]);
 
     const handleDragEnd = async (event: DragEndEvent) => {
@@ -105,31 +131,98 @@ export default function Fields(props: FieldsProps) {
         setOpenDialogType(OpenDialogType.DeleteField);
     };
 
+    const toggleSelect = (field: FieldDto) => {
+        setSelectedIds((prev) =>
+            prev.includes(field.id)
+                ? prev.filter((id) => id !== field.id)
+                : [...prev, field.id]
+        );
+    };
+
+    const startSelecting = () => {
+        setIsReordering(false);
+        setIsSelecting(true);
+        setSelectedIds([]);
+    };
+
+    const stopSelecting = () => {
+        setIsSelecting(false);
+        setSelectedIds([]);
+    };
+
+    const selectedFields = selectedIds
+        .map((id) => fields.find((f) => f.id === id))
+        .filter((f): f is FieldDto => f !== undefined);
+
     return (
         <>
             <Stack gap="md" h={"100%"}>
                 {canEditSchema && (
                     <Group justify="space-between" w="100%">
-                        <Button
-                            color={props.tracker.color}
-                            variant="outline"
-                            onClick={() =>
-                                setOpenDialogType(OpenDialogType.CreateField)
-                            }
-                            leftSection={<FiPlus size={18} />}
-                        >
-                            Create
-                        </Button>
-                        <Group>
-                            <ActionIcon
-                                size={"lg"}
-                                variant={isReordering ? "filled" : "outline"}
-                                onClick={() => setIsReordering((prev) => !prev)}
-                                color={props.tracker.color}
-                            >
-                                <CiBoxList size={18} />
-                            </ActionIcon>
-                        </Group>
+                        {isSelecting ? (
+                            <Group>
+                                <Button
+                                    variant="default"
+                                    onClick={stopSelecting}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    color={props.tracker.color}
+                                    onClick={() =>
+                                        setOpenDialogType(
+                                            OpenDialogType.ExtractFields
+                                        )
+                                    }
+                                    disabled={selectedIds.length === 0}
+                                >
+                                    Extract
+                                    {selectedIds.length > 0 &&
+                                        ` (${selectedIds.length})`}
+                                </Button>
+                            </Group>
+                        ) : (
+                            <>
+                                <Button
+                                    color={props.tracker.color}
+                                    variant="outline"
+                                    onClick={() =>
+                                        setOpenDialogType(
+                                            OpenDialogType.CreateField
+                                        )
+                                    }
+                                    leftSection={<FiPlus size={18} />}
+                                >
+                                    Create
+                                </Button>
+                                <Group>
+                                    <Tooltip label="Extract fields to a new tracker">
+                                        <ActionIcon
+                                            size={"lg"}
+                                            variant="outline"
+                                            onClick={startSelecting}
+                                            color={props.tracker.color}
+                                            aria-label="Extract fields to a new tracker"
+                                        >
+                                            <TbArrowsSplit size={18} />
+                                        </ActionIcon>
+                                    </Tooltip>
+                                    <ActionIcon
+                                        size={"lg"}
+                                        variant={
+                                            isReordering ? "filled" : "outline"
+                                        }
+                                        onClick={() =>
+                                            setIsReordering((prev) => !prev)
+                                        }
+                                        color={props.tracker.color}
+                                        aria-label="Reorder fields"
+                                    >
+                                        <CiBoxList size={18} />
+                                    </ActionIcon>
+                                </Group>
+                            </>
+                        )}
                     </Group>
                 )}
 
@@ -148,7 +241,17 @@ export default function Fields(props: FieldsProps) {
                                 <Stack gap="md">
                                     {sortedFields.map((field) => (
                                         <SortableFieldCard
-                                            isReordering={isReordering}
+                                            isReordering={
+                                                isReordering && !isSelecting
+                                            }
+                                            isSelecting={isSelecting}
+                                            selected={selectedIds.includes(
+                                                field.id
+                                            )}
+                                            selectableReason={extractBlockReason(
+                                                field
+                                            )}
+                                            onToggleSelect={toggleSelect}
                                             key={field.id}
                                             color={props.tracker.color}
                                             field={field}
@@ -201,6 +304,25 @@ export default function Fields(props: FieldsProps) {
                     }}
                 />
             )}
+            {openDialogType === OpenDialogType.ExtractFields &&
+                selectedFields.length > 0 && (
+                    <ExtractFieldsDialog
+                        tracker={props.tracker}
+                        fields={selectedFields}
+                        onClose={() => setOpenDialogType(undefined)}
+                        onExtracted={(result) => {
+                            setOpenDialogType(undefined);
+                            stopSelecting();
+                            notifications.show({
+                                title: "Fields extracted",
+                                message: `${result.newTrackerName} now holds ${result.extractedEntryCount} rows.`,
+                            });
+                            navigate(
+                                `/trackers/${result.newTrackerId}/fields`
+                            );
+                        }}
+                    />
+                )}
         </>
     );
 }

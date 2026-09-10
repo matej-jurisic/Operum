@@ -28,6 +28,25 @@
     touch-action: none;
 }
 
+/* An untitled tabs container's arrange-mode header: floated as a compact bar over the top
+   left corner rather than taking a row in flow, so entering arrange mode never pushes the
+   tab strip and its sub-grid down while they are being arranged. Mirrors the plain
+   container's floating header. */
+.tabs-container-header[data-floating] {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 2;
+    min-height: 0;
+    width: auto;
+    max-width: calc(100% - 8px);
+    padding: 4px 6px;
+    border: 1px solid var(--mantine-color-default-border);
+    border-radius: var(--mantine-radius-sm);
+    box-shadow: var(--mantine-shadow-sm);
+    background: var(--mantine-color-body);
+}
+
 .tabs-container-grip {
     color: var(--mantine-color-dimmed);
     flex-shrink: 0;

@@ -101,7 +101,7 @@ export const createBarChartTooltipContent = (
         return (
             <Paper p="sm" shadow="sm" withBorder>
                 <Text size="sm" c="dimmed" mb="xs">
-                    {renderValue(analytic.nameField.type, label)}
+                    {renderValue(analytic.nameField?.type, label)}
                 </Text>
                 <Group gap="xs" wrap="nowrap" maw={300}>
                     <Box

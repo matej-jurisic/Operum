@@ -5,6 +5,7 @@ import {
     Modal,
     Paper,
     Select,
+    SimpleGrid,
     Stack,
     Tabs,
     Text,
@@ -323,16 +324,20 @@ export function WidgetLibraryModal({ color, onClose }: Props) {
             </Group>
         );
 
-    // The list is one bordered surface of quiet rows rather than a grid of standalone
-    // cards -- easier to scan down when there are a lot of saved widgets.
-    const listContainer = (count: number, noun: string, rows: ReactNode) => (
+    // The Charts and Tables tabs show their saved definitions as a grid of cards that
+    // reflows to the modal width.
+    const cardGrid = (count: number, noun: string, cards: ReactNode) => (
         <Stack gap="xs">
             <Text size="xs" c="dimmed">
                 {count} {count === 1 ? noun : `${noun}s`}
             </Text>
-            <Paper withBorder radius="md" p={4}>
-                <Stack gap={2}>{rows}</Stack>
-            </Paper>
+            <SimpleGrid
+                type="container"
+                cols={{ base: 1, "460px": 2, "720px": 3 }}
+                spacing="sm"
+            >
+                {cards}
+            </SimpleGrid>
         </Stack>
     );
 
@@ -458,7 +463,7 @@ export function WidgetLibraryModal({ color, onClose }: Props) {
                                     }
                                 />
                             ) : (
-                                scrollRegion(listContainer(
+                                scrollRegion(cardGrid(
                                     filteredWidgets.length,
                                     "chart",
                                     filteredWidgets.map((widget) => (
@@ -509,7 +514,7 @@ export function WidgetLibraryModal({ color, onClose }: Props) {
                                     }
                                 />
                             ) : (
-                                scrollRegion(listContainer(
+                                scrollRegion(cardGrid(
                                     filteredEntriesWidgets.length,
                                     "table",
                                     filteredEntriesWidgets.map((entriesWidget) => (

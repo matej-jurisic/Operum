@@ -33,6 +33,12 @@ namespace Operum.API.Controllers
             return GetApiResponse(await fieldsService.DeleteField(trackerId, fieldId));
         }
 
+        [HttpPost("extract")]
+        public async Task<IActionResult> ExtractFields([FromRoute] string trackerId, [FromBody] ExtractFieldsDto extract)
+        {
+            return GetApiResponse(await fieldsService.ExtractFields(trackerId, extract));
+        }
+
         [HttpPut("reorder")]
         public async Task<IActionResult> ReorderFields([FromRoute] string trackerId, [FromBody] ReorderFieldsDto reorderFields)
         {

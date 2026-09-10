@@ -1,6 +1,10 @@
 import api from "../../../shared/api/api";
 import { ApiResponse } from "../../../shared/types/ApiResponse";
 import { CreateFieldDto } from "../types/CreateFieldDto";
+import {
+    ExtractFieldsDto,
+    ExtractFieldsResultDto,
+} from "../types/ExtractFieldsDto";
 import { FieldDto } from "../types/FieldDto";
 import { UpdateFieldDto } from "../types/UpdateFieldDto";
 
@@ -37,5 +41,14 @@ export const fieldsController = {
         fieldId: string
     ): Promise<ApiResponse> => {
         return await api.delete(`/trackers/${trackerId}/fields/${fieldId}`);
+    },
+    extractFields: async (
+        trackerId: string,
+        values: ExtractFieldsDto
+    ): Promise<ApiResponse<ExtractFieldsResultDto>> => {
+        return await api.post(
+            `/trackers/${trackerId}/fields/extract`,
+            values
+        );
     },
 };

@@ -7,6 +7,7 @@ using Operum.Model.Constants.Fields;
 using Operum.Model.DTOs.Fields;
 using Operum.Model.DTOs.Fields.Requests;
 using Operum.Model.Enums;
+using Operum.Model.Extensions;
 using Operum.Model.Models;
 using Operum.Service.Interfaces;
 using Operum.Service.Mappings.Mapper;
@@ -276,6 +277,241 @@ namespace Operum.Service.Services.Fields
 
             var updatedField = await GetField(trackerId, fieldId);
             return Result.Success(updatedField.Data);
+        }
+
+        // A field's value cannot be extracted if it is derived from other fields or already
+        // points somewhere else -- both would land in the new tracker meaning nothing.
+        private static readonly HashSet<string> NonExtractableTypes = [DataTypes.Reference];
+
+        // Separator for building the grouping key. A unit separator never appears in a
+        // formatted field value, so it cannot make two different combinations collide.
+        private const char KeySeparator = (char)0x1F;
+
+        public async Task<Result<ExtractFieldsResultDto>> ExtractFields(string trackerId, ExtractFieldsDto extract)
+        {
+            var user = currentUserService.GetCurrentUser();
+            var tracker = await db.Trackers
+                .Include(t => t.ApplicationUserTrackers)
+                .FirstOrDefaultAsync(t => t.Id == trackerId);
+            var isOwner = tracker?.OwnerId == user.Id;
+            var userTracker = tracker?.ApplicationUserTrackers.FirstOrDefault(ut => ut.ApplicationUserId == user.Id);
+            if (tracker == null || (!isOwner && userTracker?.CanEditSchema != true))
+            {
+                return Result.Failure(ResultStatusCodes.NotFound, Messages.ItemNotFound("tracker"));
+            }
+
+            var allFields = await db.Fields.Where(f => f.TrackerId == trackerId).ToListAsync();
+            var fieldsById = allFields.ToDictionary(f => f.Id);
+
+            var selectedIds = extract.FieldIds.Distinct().ToList();
+            if (selectedIds.Any(id => !fieldsById.ContainsKey(id)))
+            {
+                return Result.Failure(ResultStatusCodes.BadRequest, Messages.ItemNotFound("field"));
+            }
+
+            var selectedFields = selectedIds
+                .Select(id => fieldsById[id])
+                .OrderBy(f => f.Order)
+                .ThenBy(f => f.Id)
+                .ToList();
+
+            if (selectedFields.Any(f => f.IsCalculated || NonExtractableTypes.Contains(f.Type)))
+            {
+                return Result.Failure(ResultStatusCodes.BadRequest, "Calculated and reference fields cannot be extracted.");
+            }
+
+            var selectedNames = selectedFields.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var blockingCalculated = allFields.FirstOrDefault(f =>
+                f.IsCalculated
+                && !string.IsNullOrWhiteSpace(f.Formula)
+                && TokenNames(f.Formula!).Any(selectedNames.Contains));
+            if (blockingCalculated != null)
+            {
+                return Result.Failure(ResultStatusCodes.BadRequest,
+                    $"The calculated field '{blockingCalculated.Name}' uses a field you are extracting. Update its formula first.");
+            }
+
+            var trackerCount = await db.Trackers.CountAsync(x => x.OwnerId == user.Id && x.TrackerTypeId == null);
+            if (trackerCount >= DataLimits.MaxTrackerCount)
+            {
+                return Result.Failure(ResultStatusCodes.BadRequest, Messages.MaxNumberReached("trackers", DataLimits.MaxTrackerCount));
+            }
+
+            // Every value of every selected field, keyed by entry. A selected field only ever
+            // belongs to this tracker, so filtering on FieldId alone stays within it.
+            var selectedIdSet = selectedIds.ToHashSet();
+            var valuesByEntry = (await db.FieldValues
+                    .Where(fv => selectedIdSet.Contains(fv.FieldId))
+                    .ToListAsync())
+                .GroupBy(fv => fv.EntryId)
+                .ToDictionary(g => g.Key, g => g.ToDictionary(fv => fv.FieldId));
+
+            var entryIds = await db.Entries
+                .Where(e => e.TrackerId == trackerId)
+                .Select(e => e.Id)
+                .ToListAsync();
+
+            // entryId -> grouping key ("" means every selected value was blank: no link, no row).
+            var keyByEntry = new Dictionary<string, string>();
+            // key -> the raw display values to seed that combination's new-tracker row.
+            var rawByKey = new Dictionary<string, Dictionary<string, string?>>();
+
+            foreach (var entryId in entryIds)
+            {
+                valuesByEntry.TryGetValue(entryId, out var fvByField);
+                var raw = new Dictionary<string, string?>();
+                var parts = new List<string>(selectedFields.Count);
+                var allBlank = true;
+
+                foreach (var field in selectedFields)
+                {
+                    string? value = null;
+                    if (fvByField != null && fvByField.TryGetValue(field.Id, out var fv))
+                    {
+                        fv.Field = field;
+                        value = fv.GetValueAsString();
+                    }
+                    raw[field.Id] = value;
+                    var normalized = (value ?? string.Empty).Trim();
+                    if (normalized.Length > 0) allBlank = false;
+                    parts.Add(normalized.ToLowerInvariant());
+                }
+
+                if (allBlank)
+                {
+                    keyByEntry[entryId] = string.Empty;
+                    continue;
+                }
+
+                var key = string.Join(KeySeparator, parts);
+                keyByEntry[entryId] = key;
+                rawByKey.TryAdd(key, raw);
+            }
+
+            if (rawByKey.Count > DataLimits.MaxEntryCount)
+            {
+                return Result.Failure(ResultStatusCodes.BadRequest, Messages.MaxNumberReached("entries", DataLimits.MaxEntryCount));
+            }
+
+            using var transaction = await db.Database.BeginTransactionAsync();
+            try
+            {
+                var newTracker = new Tracker
+                {
+                    Name = extract.NewTrackerName.Trim(),
+                    OwnerId = user.Id,
+                    Color = tracker.Color,
+                    Icon = tracker.Icon,
+                };
+                await db.Trackers.AddAsync(newTracker);
+                await db.SaveChangesAsync();
+                var newTrackerId = newTracker.Id;
+                var newTrackerName = newTracker.Name;
+
+                var newFieldByOldId = new Dictionary<string, Field>();
+                var order = 1;
+                foreach (var field in selectedFields)
+                {
+                    var copy = new Field
+                    {
+                        Name = field.Name,
+                        Description = field.Description,
+                        Type = field.Type,
+                        Required = field.Required,
+                        Visible = field.Visible,
+                        Order = order++,
+                        SelectOptions = field.SelectOptions,
+                        TrackerId = newTracker.Id,
+                    };
+                    newFieldByOldId[field.Id] = copy;
+                    await db.Fields.AddAsync(copy);
+                }
+                await db.SaveChangesAsync();
+
+                var newEntryByKey = new Dictionary<string, Entry>();
+                foreach (var (key, raw) in rawByKey)
+                {
+                    var entry = new Entry { TrackerId = newTracker.Id, CreatedAt = DateTime.UtcNow };
+                    await db.Entries.AddAsync(entry);
+
+                    foreach (var field in selectedFields)
+                    {
+                        if (string.IsNullOrWhiteSpace(raw[field.Id])) continue;
+                        var copy = newFieldByOldId[field.Id];
+                        var fieldValue = new FieldValue { EntryId = entry.Id, FieldId = copy.Id };
+                        fieldValue.SetFieldValue(copy, raw[field.Id]);
+                        await db.FieldValues.AddAsync(fieldValue);
+                    }
+
+                    newEntryByKey[key] = entry;
+                }
+                await db.SaveChangesAsync();
+
+                var referenceField = new Field
+                {
+                    Name = extract.ReferenceFieldName.Trim(),
+                    Type = DataTypes.Reference,
+                    Order = selectedFields.Min(f => f.Order),
+                    TrackerId = trackerId,
+                    ReferencedTrackerId = newTracker.Id,
+                    ReferencedDisplayFieldId = extract.DisplayFieldId != null
+                        && newFieldByOldId.TryGetValue(extract.DisplayFieldId, out var displayCopy)
+                            ? displayCopy.Id
+                            : null,
+                };
+                await db.Fields.AddAsync(referenceField);
+                await db.SaveChangesAsync();
+
+                var referenceValues = entryIds
+                    .Where(id => keyByEntry[id].Length > 0)
+                    .Select(id => new FieldValue
+                    {
+                        EntryId = id,
+                        FieldId = referenceField.Id,
+                        ReferencedEntryId = newEntryByKey[keyByEntry[id]].Id,
+                    })
+                    .ToList();
+                await db.FieldValues.AddRangeAsync(referenceValues);
+                await db.SaveChangesAsync();
+
+                var referenceFieldId = referenceField.Id;
+
+                // Everything above is persisted; drop it from the tracker so the closing
+                // renumber can attach its own instances without an identity clash.
+                db.ChangeTracker.Clear();
+
+                await db.Fields.Where(f => selectedIdSet.Contains(f.Id)).ExecuteDeleteAsync();
+
+                var remaining = await db.Fields
+                    .AsTracking()
+                    .Where(f => f.TrackerId == trackerId)
+                    .OrderBy(f => f.Order)
+                    .ThenBy(f => f.Id)
+                    .ToListAsync();
+                for (var i = 0; i < remaining.Count; i++)
+                {
+                    remaining[i].Order = i + 1;
+                }
+                await db.SaveChangesAsync();
+
+                await referenceLabelService.RefreshFieldReferences(referenceFieldId);
+
+                await transaction.CommitAsync();
+
+                return Result.Success(new ExtractFieldsResultDto
+                {
+                    NewTrackerId = newTrackerId,
+                    NewTrackerName = newTrackerName,
+                    ReferenceFieldId = referenceFieldId,
+                    ExtractedEntryCount = newEntryByKey.Count,
+                });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                logger.LogError(ex, "Exception occurred while extracting fields from tracker {TrackerId}.", trackerId);
+                return Result.Failure(ResultStatusCodes.Error);
+            }
         }
 
         private async Task<string?> ValidateReferenceConfig(string? referencedTrackerId, string? displayFieldId, string userId)
